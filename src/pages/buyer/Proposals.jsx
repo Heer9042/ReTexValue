@@ -3,9 +3,29 @@ import { useApp } from '../../context/AppContext';
 import { FileText, CheckCircle, XCircle, Clock, ChevronRight, MessageSquare, AlertCircle } from 'lucide-react';
 
 export default function BuyerProposals() {
-  const { proposals, updateProposalStatus, user } = useApp();
+  const { proposals, updateProposalStatus, user, initiatePayment } = useApp();
   const [showNegotiate, setShowNegotiate] = useState(null);
   const [negotiationMsg, setNegotiationMsg] = useState('');
+
+  const handleAcceptProposal = async (proposal) => {
+    try {
+        const paymentResult = await initiatePayment(proposal.totalPrice, {
+           proposalId: proposal.id,
+           factoryName: proposal.factoryName,
+           description: `Bulk procurement from ${proposal.factoryName}`
+        });
+
+        if (paymentResult?.success) {
+           await updateProposalStatus(proposal.id, 'Accepted');
+           alert("Proposal accepted and payment verified! Transaction ID: " + paymentResult.paymentId);
+        }
+    } catch (err) {
+        console.error("Acceptance protocol aborted", err);
+        if (err.message !== "Payment cancelled") {
+            alert("Payment failed: " + err.message);
+        }
+    }
+  };
 
   // Filter for current buyer
   const myProposals = proposals.filter(p => p.buyerId === user?.id);
@@ -89,7 +109,7 @@ export default function BuyerProposals() {
                          {proposal.status === 'Pending' ? (
                             <>
                                <button 
-                                  onClick={() => updateProposalStatus(proposal.id, 'Accepted')}
+                                  onClick={() => handleAcceptProposal(proposal)}
                                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-6 rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
                                >
                                   <CheckCircle size={18} /> Accept Quote

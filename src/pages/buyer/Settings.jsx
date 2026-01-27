@@ -1,203 +1,238 @@
-import React, { useState } from 'react';
-import { Bell, Lock, User, Globe, Palette, Shield, Mail, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
+import { Bell, Lock, Globe, Palette, Shield, ChevronRight } from 'lucide-react';
 
 export default function BuyerSettings() {
+  const { user, updateProfile } = useApp();
+  const navigate = useNavigate();
+  
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
-  const [orderUpdates, setOrderUpdates] = useState(true);
   const [newListings, setNewListings] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Sync state with user data on load
+  useEffect(() => {
+    if (user) {
+      setEmailNotifications(user.notifications_email ?? true);
+      setPushNotifications(user.notifications_push ?? true);
+      setNewListings(user.notifications_listings ?? false);
+    }
+  }, [user]);
+
+  const handleUpdate = async () => {
+    setSubmitting(true);
+    try {
+       await updateProfile({
+          notifications_email: emailNotifications,
+          notifications_push: pushNotifications,
+          notifications_listings: newListings
+       });
+       alert("Preferences updated successfully!");
+    } catch (err) {
+       console.error("Failed to update settings:", err);
+    } finally {
+       setSubmitting(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-10">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Settings</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage your account preferences and settings</p>
+        <p className="text-slate-600 dark:text-slate-400 font-medium text-sm">Configure your platform experience and security protocols.</p>
       </div>
 
-      {/* Account Settings */}
-      <SettingSection title="Account Settings" icon={<User />}>
-        <SettingItem 
-          label="Full Name" 
-          value="John Doe"
-          type="text"
-        />
-        <SettingItem 
-          label="Email Address" 
-          value="john@example.com"
-          type="email"
-        />
-        <SettingItem 
-          label="Phone Number" 
-          value="+91 98765 43210"
-          type="tel"
-        />
-        <button className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors">
-          Update Profile
-        </button>
-      </SettingSection>
-
-      {/* Notifications */}
-      <SettingSection title="Notifications" icon={<Bell />}>
-        <ToggleSetting 
-          label="Email Notifications"
-          description="Receive email updates about your orders and proposals"
-          checked={emailNotifications}
-          onChange={setEmailNotifications}
-        />
-        <ToggleSetting 
-          label="Push Notifications"
-          description="Get push notifications on your device"
-          checked={pushNotifications}
-          onChange={setPushNotifications}
-        />
-        <ToggleSetting 
-          label="Order Updates"
-          description="Get notified when your order status changes"
-          checked={orderUpdates}
-          onChange={setOrderUpdates}
-        />
-        <ToggleSetting 
-          label="New Listings Alert"
-          description="Get alerted when new materials matching your interests are listed"
-          checked={newListings}
-          onChange={setNewListings}
-        />
-      </SettingSection>
-
-      {/* Security */}
-      <SettingSection title="Security" icon={<Lock />}>
-        <div className="space-y-4">
-          <div>
-            <button className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-medium transition-colors">
-              Change Password
-            </button>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Last changed 3 months ago</p>
-          </div>
-          <div>
-            <button className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-medium transition-colors">
-              Enable Two-Factor Authentication
-            </button>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Add an extra layer of security to your account</p>
-          </div>
+      {/* Settings Overview Header */}
+      <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700 shadow-xl flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+           <Palette size={120} />
         </div>
-      </SettingSection>
-
-      {/* Preferences */}
-      <SettingSection title="Preferences" icon={<Palette />}>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Language
-            </label>
-            <select className="w-full md:w-64 px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-              <option>English</option>
-              <option>Hindi</option>
-              <option>Marathi</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Currency
-            </label>
-            <select className="w-full md:w-64 px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-              <option>INR (₹)</option>
-              <option>USD ($)</option>
-              <option>EUR (€)</option>
-            </select>
-          </div>
+        
+        <div className="relative w-20 h-20 shrink-0">
+           <img 
+              src={user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.full_name || 'User'}&background=random`} 
+              alt="Profile" 
+              className="w-full h-full rounded-2xl object-cover border-4 border-slate-50 dark:border-slate-900 shadow-lg"
+           />
         </div>
-      </SettingSection>
 
-      {/* Privacy */}
-      <SettingSection title="Privacy" icon={<Shield />}>
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <input 
-              type="checkbox" 
-              id="dataSharing"
-              className="mt-1 w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+        <div className="flex-1 text-center md:text-left relative z-10">
+           <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Settings Hub</h2>
+           <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Hello, {user?.full_name || 'Partner'}. Manage your global preferences here.</p>
+           <div className="mt-4">
+              <button 
+                onClick={() => navigate('/buyer/profile')}
+                className="px-5 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-emerald-600 hover:text-white text-slate-900 dark:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 mx-auto md:mx-0"
+              >
+                 Identity Portfolio <ChevronRight size={14} />
+              </button>
+           </div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Notifications */}
+        <SettingSection title="Notification Logic" icon={<Bell />}>
+          <div className="space-y-1">
+            <ToggleSetting 
+              label="Sync Emails"
+              description="Inventory updates and order receipts"
+              checked={emailNotifications}
+              onChange={setEmailNotifications}
             />
-            <label htmlFor="dataSharing" className="flex-1 cursor-pointer">
-              <div className="font-medium text-slate-900 dark:text-white">Data Sharing</div>
-              <div className="text-sm text-slate-500 dark:text-slate-400">Allow us to share anonymized data to improve our services</div>
-            </label>
-          </div>
-          <div className="flex items-start gap-3">
-            <input 
-              type="checkbox" 
-              id="profileVisibility"
-              className="mt-1 w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-              defaultChecked
+            <ToggleSetting 
+              label="Real-time Push"
+              description="Instant alerts on marketplace activity"
+              checked={pushNotifications}
+              onChange={setPushNotifications}
             />
-            <label htmlFor="profileVisibility" className="flex-1 cursor-pointer">
-              <div className="font-medium text-slate-900 dark:text-white">Profile Visibility</div>
-              <div className="text-sm text-slate-500 dark:text-slate-400">Make your profile visible to verified sellers</div>
-            </label>
+            <ToggleSetting 
+              label="Curated Matches"
+              description="Notify when relevant materials are listed"
+              checked={newListings}
+              onChange={setNewListings}
+            />
           </div>
-        </div>
-      </SettingSection>
+          <button 
+            onClick={handleUpdate}
+            disabled={submitting}
+            className="w-full mt-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+          >
+            {submitting ? 'Updating Grid...' : 'Deploy Preferences'}
+          </button>
+        </SettingSection>
+
+        {/* Security */}
+        <SettingSection title="Security Protocol" icon={<Lock />}>
+          <div className="space-y-4 text-left">
+            <SecurityAction 
+              label="Change Master Password" 
+              description="Security rotation recommended" 
+              icon={<Shield size={18} />}
+            />
+            <SecurityAction 
+              label="Two-Factor Control" 
+              description="Enhance account integrity" 
+              icon={<Lock size={18} />}
+            />
+            <SecurityAction 
+              label="Authorized Devices" 
+              description="Manage active sessions" 
+              icon={<Globe size={18} />}
+            />
+          </div>
+        </SettingSection>
+
+        {/* Appearance & Prefs */}
+        <SettingSection title="Environment" icon={<Palette />}>
+          <div className="space-y-6">
+            <SelectField 
+              label="Native Language" 
+              options={['English (Global)', 'Marathi', 'Hindi']} 
+            />
+            <SelectField 
+              label="Accounting Currency" 
+              options={['INR (₹)', 'USD ($)']} 
+            />
+          </div>
+        </SettingSection>
+
+        {/* Visibility */}
+        <SettingSection title="Privacy Hub" icon={<Shield />}>
+          <div className="space-y-1">
+             <ToggleSetting 
+                label="Public Registry"
+                description="Allow sellers to find your business"
+                checked={true}
+                onChange={() => {}}
+             />
+             <ToggleSetting 
+                label="Analytics Feedback"
+                description="Share data to optimize platform AI"
+                checked={true}
+                onChange={() => {}}
+             />
+          </div>
+        </SettingSection>
+      </div>
 
       {/* Danger Zone */}
-      <SettingSection title="Danger Zone" icon={<Shield />} danger>
-        <div className="space-y-4">
-          <div>
-            <button className="px-4 py-2 bg-red-100 dark:bg-red-500/10 hover:bg-red-200 dark:hover:bg-red-500/20 text-red-700 dark:text-red-400 rounded-lg font-medium transition-colors">
-              Deactivate Account
-            </button>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Temporarily disable your account</p>
-          </div>
-          <div>
-            <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
-              Delete Account
-            </button>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Permanently delete your account and all data</p>
-          </div>
-        </div>
-      </SettingSection>
+      <div className="pt-8 border-t border-slate-100 dark:border-slate-800">
+         <SettingSection title="Irreversible Actions" icon={<Shield />} danger>
+           <div className="flex flex-col md:flex-row gap-4">
+              <button className="flex-1 px-6 py-4 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-2xl font-bold text-[10px] uppercase tracking-widest border border-red-100 dark:border-red-900/30 hover:bg-red-100 transition-all">
+                 Deactivate Account
+              </button>
+              <button className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg active:scale-95">
+                 Permanent Data Wipe
+              </button>
+           </div>
+         </SettingSection>
+      </div>
     </div>
   );
 }
 
 function SettingSection({ title, icon, children, danger = false }) {
   return (
-    <div className={`bg-white dark:bg-slate-800 border ${danger ? 'border-red-200 dark:border-red-500/30' : 'border-slate-200 dark:border-slate-700'} rounded-2xl p-6 shadow-sm`}>
-      <div className="flex items-center gap-3 mb-6">
-        <div className={`p-2 rounded-lg ${danger ? 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400' : 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
+    <div className={`bg-white dark:bg-slate-800 border ${danger ? 'border-red-100 dark:border-red-900/30' : 'border-slate-100 dark:border-slate-700'} rounded-[2.5rem] p-8 shadow-sm transition-all hover:shadow-md`}>
+      <div className="flex items-center gap-3 mb-8">
+        <div className={`p-2.5 rounded-xl ${danger ? 'bg-red-50 dark:bg-red-500/10 text-red-600' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600'}`}>
           {icon}
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">{title}</h2>
+        <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">{title}</h2>
       </div>
       {children}
     </div>
   );
 }
 
-function SettingItem({ label, value, type = "text" }) {
+function SecurityAction({ label, description, icon }) {
   return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-        {label}
-      </label>
-      <input 
-        type={type}
-        defaultValue={value}
-        className="w-full px-4 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-      />
+    <button className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 hover:border-emerald-500/30 transition-all group">
+       <div className="flex items-center gap-4 text-left">
+          <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl text-slate-400 group-hover:text-emerald-500 transition-colors">
+             {icon}
+          </div>
+          <div>
+             <div className="text-sm font-bold text-slate-900 dark:text-white">{label}</div>
+             <div className="text-[10px] text-slate-500 font-medium">{description}</div>
+          </div>
+       </div>
+       <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+    </button>
+  );
+}
+
+function SelectField({ label, options }) {
+  return (
+    <div className="space-y-2 text-left">
+       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+       <div className="relative">
+          <select className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white font-bold appearance-none outline-none focus:ring-2 focus:ring-emerald-500/20">
+             {options.map(opt => <option key={opt}>{opt}</option>)}
+          </select>
+          <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+             <ChevronRight size={16} className="rotate-90" />
+          </div>
+       </div>
     </div>
   );
 }
 
 function ToggleSetting({ label, description, checked, onChange }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700 last:border-0">
-      <div className="flex-1">
-        <div className="font-medium text-slate-900 dark:text-white">{label}</div>
-        <div className="text-sm text-slate-500 dark:text-slate-400">{description}</div>
+    <div className="flex items-center justify-between py-5 border-b border-slate-50 dark:border-slate-800 last:border-0">
+      <div className="flex-1 text-left">
+        <div className="font-bold text-slate-900 dark:text-white text-sm">{label}</div>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{description}</div>
       </div>
       <button
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          checked ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'
+          checked ? 'bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'
         }`}
       >
         <span

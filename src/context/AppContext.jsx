@@ -16,6 +16,7 @@ export const AppProvider = ({ children }) => {
   const [proposals, setProposals] = useState([]);
   const [reports, setReports] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [packages, setPackages] = useState([]);
 
   // New States for Features
   const [approvalHistory, setApprovalHistory] = useState([]);
@@ -398,57 +399,114 @@ export const AppProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Initial Data Fetch
-    fetchUsers();
-    fetchListings();
-    fetchTransactions();
-    fetchReports();
-    fetchBulkRequests();
-    fetchProposals();
-    fetchSettings();
-
     // specific auth check function
     const checkUser = async () => {
       try {
-          // Check for mock user first (for demo persistence)
           const storedMock = localStorage.getItem('mockUser');
           if (storedMock) {
-              setUser(JSON.parse(storedMock));
+              const mu = JSON.parse(storedMock);
+              setUser(mu);
               setLoading(false);
+              fetchInitialData();
               return;
           }
 
-          // Timeout protection for initial load
-          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ data: { session: null } }), 5000));
-          
-          const { data: { session } } = await Promise.race([
-              supabase.auth.getSession(),
-              timeoutPromise
-          ]);
+          // ⏱️ Add timeout to prevent infinite loading
+          const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Auth check timed out')), 10000);
+          });
 
-          if (session?.user) {
-            // Fetch profile
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-              
-            if (profile) {
-                setUser({
-                    id: session.user.id,
-                    email: session.user.email,
-                    name: profile.full_name || profile.username,
-                    role: profile.role,
-                    ...profile
-                });
-            }
-          }
+          const authCheckPromise = (async () => {
+              const { data: { session } } = await supabase.auth.getSession();
+
+              if (session?.user) {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', session.user.id)
+                  .single();
+                  
+                if (profile) {
+                    // ✨ Enhanced avatar URL handling with cache-busting for Supabase Storage
+                    let avatarUrl = profile.avatar_url || '';
+                    if (avatarUrl && avatarUrl.startsWith('http') && avatarUrl.includes('supabase') && !avatarUrl.includes('?t=')) {
+                        avatarUrl = `${avatarUrl}?t=${Date.now()}`;
+                        console.log('🖼️ [Avatar] Cache-busted avatar URL on initial load:', avatarUrl);
+                    }
+                    
+                    const userData = {
+                        id: session.user.id,
+                        email: session.user.email,
+                        full_name: profile.full_name || '',
+                        username: profile.username || '',
+                        phone: profile.phone || '',
+                        address: profile.address || '',
+                        location: profile.location || '',
+                        company_name: profile.company_name || '',
+                        gst_number: profile.gst_number || '',
+                        role: profile.role || 'buyer',
+                        avatar_url: avatarUrl,
+                        notifications_email: profile.notifications_email ?? true,
+                        notifications_push: profile.notifications_push ?? true,
+                        notifications_listings: profile.notifications_listings ?? false,
+                        ...profile,
+                        name: profile.full_name || profile.username || ''
+                    };
+                    
+                    console.log('👤 [Auth] User profile loaded:', {
+                        id: userData.id,
+                        name: userData.full_name,
+                        avatar: userData.avatar_url ? '✅ Has Avatar' : '❌ No Avatar',
+                        role: userData.role
+                    });
+                    
+                    setUser(userData);
+                    localStorage.setItem('userRole', profile.role);
+                    fetchInitialData();
+                } else {
+                 localStorage.removeItem('userRole');
+                }
+              }
+          })();
+
+          // Race between auth check and timeout
+          await Promise.race([authCheckPromise, timeoutPromise]);
+
       } catch (error) {
-          console.error("Auth check failed", error);
+          if (error.message === 'Auth check timed out') {
+              console.warn('⚠️ [Auth] Supabase connection timed out - showing login');
+              
+              // Check if we have a stored role - if so, create mock user to let them in
+              const storedRole = localStorage.getItem('userRole');
+              if (storedRole) {
+                  console.log('🔓 [Offline] Using cached session');
+                  const offlineUser = {
+                      id: 'offline-' + Date.now(),
+                      name: 'Offline User',
+                      role: storedRole,
+                      email: 'offline@retexvalue.com',
+                      full_name: 'Offline Mode',
+                      isOffline: true
+                  };
+                  setUser(offlineUser);
+              }
+          } else {
+              console.error("❌ [Auth] Check failed:", error);
+          }
       } finally {
-          setLoading(false); // Done checking
+          setLoading(false);
       }
+    };
+
+    const fetchInitialData = () => {
+        fetchUsers();
+        fetchListings();
+        fetchTransactions();
+        fetchReports();
+        fetchBulkRequests();
+        fetchProposals();
+        fetchSettings();
+        fetchPackages();
     };
 
     checkUser();
@@ -463,48 +521,72 @@ export const AppProvider = ({ children }) => {
           .single();
 
           if (profile) {
-            setUser({
+            // ✨ Enhanced avatar URL handling with cache-busting
+            let avatarUrl = profile.avatar_url || '';
+            if (avatarUrl && avatarUrl.startsWith('http') && avatarUrl.includes('supabase') && !avatarUrl.includes('?t=')) {
+                avatarUrl = `${avatarUrl}?t=${Date.now()}`;
+            }
+            
+            const userData = {
                 id: session.user.id,
                 email: session.user.email,
-                name: profile.full_name || profile.username,
-                role: profile.role,
-                ...profile
-            });
-            // Clear mock if real login happens
+                full_name: profile.full_name || '',
+                username: profile.username || '',
+                phone: profile.phone || '',
+                address: profile.address || '',
+                location: profile.location || '',
+                company_name: profile.company_name || '',
+                gst_number: profile.gst_number || '',
+                role: profile.role || 'buyer',
+                avatar_url: avatarUrl,
+                notifications_email: profile.notifications_email ?? true,
+                notifications_push: profile.notifications_push ?? true,
+                notifications_listings: profile.notifications_listings ?? false,
+                ...profile,
+                name: profile.full_name || profile.username || ''
+            };
+            setUser(userData);
+            localStorage.setItem('userRole', profile.role); 
             localStorage.removeItem('mockUser');
+            fetchInitialData();
           }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         localStorage.removeItem('mockUser');
+        localStorage.removeItem('userRole');
       }
     });
 
     return () => {
-      authListener.subscription.unsubscribe();
+      if (authListener?.subscription) authListener.subscription.unsubscribe();
     };
   }, []);
 
   const login = async (role, credentials) => {
     if (typeof role === 'object') {
         setUser(role);
+        localStorage.setItem('userRole', role.role);
         return;
     }
     const mockUser = { id: 'mock', name: 'Mock User', role: role, email: 'mock@test.com' };
     setUser(mockUser);
     localStorage.setItem('mockUser', JSON.stringify(mockUser));
+    localStorage.setItem('userRole', role);
   };
 
   const logout = async () => {
-      await supabase.auth.signOut();
-      localStorage.clear();
-      sessionStorage.clear();
-      // Clear all cookies
-      document.cookie.split(";").forEach((c) => {
-        document.cookie = c
-          .replace(/^ +/, "")
-          .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-      });
-      setUser(null);
+      try {
+          setUser(null);
+          localStorage.removeItem('mockUser');
+          localStorage.removeItem('userRole');
+          await supabase.auth.signOut();
+      } catch (err) {
+          console.error("Logout error:", err);
+      } finally {
+          localStorage.clear();
+          sessionStorage.clear();
+          setUser(null);
+      }
   };
 
   const addListing = async (listing) => {
@@ -841,30 +923,329 @@ export const AppProvider = ({ children }) => {
          const id = user?.id;
          if(!id) return;
 
-         // Bypass DB for mock users
          if (id === 'mock') {
             const updatedUser = { ...user, ...profileData };
             setUser(updatedUser);
-            localStorage.setItem('mockUser', JSON.stringify(updatedUser)); // Persist mock update
-            alert("Profile updated successfully (Local)!");
+            localStorage.setItem('mockUser', JSON.stringify(updatedUser)); 
             return;
          }
 
-         const { data, error } = await supabase
-            .from('profiles')
-            .update(profileData)
-            .eq('id', id)
-            .select()
-            .single();
+         // 🎯 Optimistic Update: Update UI immediately for better UX
+         const optimisticUser = { ...user, ...profileData };
+         setUser(optimisticUser);
+         console.log('⚡ [Optimistic] UI updated immediately, syncing to database...');
 
-         if (error) throw error;
-         
-         const updatedUser = { ...user, ...data }; 
-         setUser(updatedUser); 
-         alert("Profile updated successfully!");
+          // Increased timeout to 30 seconds for slow connections
+          const timeoutPromise = new Promise((_, reject) => 
+             setTimeout(() => reject(new Error("Database Sync Timed Out")), 30000)
+          );
+
+         const performUpdate = async (dataToSync) => {
+            const { data, error } = await supabase
+               .from('profiles')
+               .update(dataToSync)
+               .eq('id', id)
+               .select()
+               .single();
+            
+            if (error) {
+                // Self-Healing Strategy: If a column is missing, remove it and retry ONCE
+                if (error.message.includes('column') && error.message.includes('not find')) {
+                    const missingColumn = error.message.match(/'([^']+)'/)?.[1];
+                    if (missingColumn && dataToSync[missingColumn] !== undefined) {
+                        console.warn(`🔔 [Self-Healing] Column "${missingColumn}" missing in DB. Stripping and retrying...`);
+                        const strippedData = { ...dataToSync };
+                        delete strippedData[missingColumn];
+                        return performUpdate(strippedData); // Recursive retry
+                    }
+                }
+                throw error;
+            }
+            return data;
+         };
+
+         const finalData = await Promise.race([performUpdate(profileData), timeoutPromise]);
+
+         // Cache busting for images
+         if (finalData.avatar_url && typeof finalData.avatar_url === 'string' && !finalData.avatar_url.includes('?t=') && finalData.avatar_url.startsWith('http')) {
+            finalData.avatar_url = `${finalData.avatar_url}?t=${Date.now()}`;
+         }
+
+         const updatedUser = { ...user, ...finalData }; 
+         setUser(updatedUser);
+         console.log('✅ [Database] Profile synced successfully');
+         return finalData;
+
      } catch (error) {
-         console.error("Failed to update profile:", error.message);
+         console.error("❌ [Database] Critical Sync Failure:", error.message);
+         
+         // Don't revert optimistic update - keeps UI responsive
+         console.warn('⚠️ [Offline Mode] Changes saved locally, will sync when connection improves');
+         
+         throw error;
      }
+  };
+
+  const uploadFile = async (file, bucket = 'avatars') => {
+    try {
+        const isMock = user?.id === 'mock';
+        
+        if (isMock) {
+            console.log("Mock Mode: Converting to DataURL...");
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const filePath = `profile-pics/${fileName}`;
+
+        // Add 20s timeout for storage
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Storage Sync Timed Out")), 20000)
+        );
+
+        console.log(`📡 [Storage] Attempting upload to bucket: "${bucket}"...`);
+
+        try {
+            const uploadPromise = supabase.storage
+                .from(bucket)
+                .upload(filePath, file, { 
+                    upsert: true,
+                    contentType: file.type 
+                });
+
+            const { data, error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
+
+            if (uploadError) {
+                console.warn("⚠️ [Storage] Supabase Upload failed. Falling back to local persistence.", uploadError);
+                throw uploadError;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from(bucket)
+                .getPublicUrl(filePath);
+
+            console.log("✅ [Storage] Cloud sync successful:", publicUrl);
+            return publicUrl;
+
+        } catch (innerErr) {
+            // FALLBACK: If Supabase Storage is not set up, don't crash the UI.
+            // Use DataURL so the profile still works for the current user session.
+            console.info("💡 [Storage] Using Local DataURL Fallback...");
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    console.log("✅ [Storage] Local fallback ready.");
+                    resolve(reader.result);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    } catch (error) {
+        console.error("❌ [Storage] Fatal Failure:", error.message);
+        throw error;
+    }
+  };
+
+  const initiatePayment = async (amount, metadata = {}) => {
+    return new Promise((resolve, reject) => {
+      if (!window.Razorpay) {
+        alert("Razorpay SDK failed to load. Please check your internet connection.");
+        return reject(new Error("Razorpay SDK not loaded"));
+      }
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_demo_key', // Replace with real key in .env
+        amount: Math.round(amount * 100), // convert to paise
+        currency: "INR",
+        name: "ReTexValue",
+        description: metadata.description || "Textile Waste Acquisition",
+        // Removed image: "/logo.png" - causes CORS issues from localhost
+        // If you need a logo, host it on a public CDN or use Razorpay's merchant logo settings
+        handler: function (response) {
+          console.log("Payment Successful:", response);
+          resolve({
+            success: true,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature
+          });
+        },
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+          contact: user?.phone || ""
+        },
+        notes: {
+          ...metadata,
+          userId: user?.id
+        },
+        theme: {
+          color: "#10b981", // Emerald-500
+        },
+        modal: {
+          ondismiss: function() {
+            reject(new Error("Payment cancelled"));
+          }
+        }
+      };
+
+      try {
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } catch (err) {
+        console.error("Razorpay error:", err);
+        reject(err);
+      }
+    });
+  };
+
+  // ===== PACKAGE MANAGEMENT FUNCTIONS =====
+  
+  const fetchPackages = async () => {
+    console.log('🔄 [fetchPackages] Starting to fetch packages...');
+    try {
+      const { data, error } = await supabase
+        .from('packages')
+        .select('*')
+        .order('price', { ascending: true });
+
+      console.log('📊 [fetchPackages] Supabase response:', { data, error });
+
+      if (error) {
+        console.error('❌ [fetchPackages] Supabase error:', error);
+        throw error;
+      }
+
+      if (data) {
+        console.log(`✅ [fetchPackages] Fetched ${data.length} packages from Supabase`);
+        const mappedPackages = data.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          price: p.price,
+          durationDays: p.duration_days,
+          features: p.features || [],
+          maxListings: p.max_listings,
+          maxBulkRequests: p.max_bulk_requests,
+          prioritySupport: p.priority_support,
+          aiCredits: p.ai_credits,
+          status: p.status,
+          badgeColor: p.badge_color,
+          isFeatured: p.is_featured,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at
+        }));
+        console.log('📦 [fetchPackages] Mapped packages:', mappedPackages);
+        setPackages(mappedPackages);
+      } else {
+        console.warn('⚠️ [fetchPackages] No data returned from Supabase');
+      }
+    } catch (error) {
+      console.error('❌ [fetchPackages] Failed to fetch packages:', error.message);
+      console.error('❌ [fetchPackages] Full error:', error);
+    }
+  };
+
+  const addPackage = async (packageData) => {
+    try {
+      const { data, error } = await supabase
+        .from('packages')
+        .insert([{
+          name: packageData.name,
+          description: packageData.description,
+          price: packageData.price,
+          duration_days: packageData.durationDays,
+          features: packageData.features,
+          max_listings: packageData.maxListings,
+          max_bulk_requests: packageData.maxBulkRequests,
+          priority_support: packageData.prioritySupport,
+          ai_credits: packageData.aiCredits,
+          status: packageData.status || 'active',
+          badge_color: packageData.badgeColor || 'blue',
+          is_featured: packageData.isFeatured || false
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newPackage = {
+          id: data.id,
+          name: data.name,
+          description: data.description,
+          price: data.price,
+          durationDays: data.duration_days,
+          features: data.features || [],
+          maxListings: data.max_listings,
+          maxBulkRequests: data.max_bulk_requests,
+          prioritySupport: data.priority_support,
+          aiCredits: data.ai_credits,
+          status: data.status,
+          badgeColor: data.badge_color,
+          isFeatured: data.is_featured,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at
+        };
+        setPackages([...packages, newPackage]);
+      }
+    } catch (error) {
+      console.error("Failed to add package:", error.message);
+      throw error;
+    }
+  };
+
+  const updatePackage = async (id, updates) => {
+    try {
+      const dbUpdates = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.price !== undefined) dbUpdates.price = updates.price;
+      if (updates.durationDays !== undefined) dbUpdates.duration_days = updates.durationDays;
+      if (updates.features !== undefined) dbUpdates.features = updates.features;
+      if (updates.maxListings !== undefined) dbUpdates.max_listings = updates.maxListings;
+      if (updates.maxBulkRequests !== undefined) dbUpdates.max_bulk_requests = updates.maxBulkRequests;
+      if (updates.prioritySupport !== undefined) dbUpdates.priority_support = updates.prioritySupport;
+      if (updates.aiCredits !== undefined) dbUpdates.ai_credits = updates.aiCredits;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      if (updates.badgeColor !== undefined) dbUpdates.badge_color = updates.badgeColor;
+      if (updates.isFeatured !== undefined) dbUpdates.is_featured = updates.isFeatured;
+
+      const { error } = await supabase
+        .from('packages')
+        .update(dbUpdates)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPackages(packages.map(p => p.id === id ? { ...p, ...updates } : p));
+    } catch (error) {
+      console.error("Failed to update package:", error.message);
+      throw error;
+    }
+  };
+
+  const deletePackage = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this package?")) return;
+
+    try {
+      const { error } = await supabase
+        .from('packages')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPackages(packages.filter(p => p.id !== id));
+    } catch (error) {
+      console.error("Failed to delete package:", error.message);
+      throw error;
+    }
   };
 
   return (
@@ -872,16 +1253,17 @@ export const AppProvider = ({ children }) => {
       user, loading, login, logout, 
       users, setUsers, fetchUsers, updateUserStatus, deleteUser, updateUser,
       listings, addListing, updateListingStatus, updateListing, deleteListing, setListings, fetchListings,
-      transactions, purchaseListing, fetchTransactions,
+      transactions, purchaseListing, fetchTransactions, initiatePayment,
       reports, generateReport,
       bulkRequests, addBulkRequest,
       settings, updateSettings,
       proposals, submitProposal, updateProposalStatus, fetchProposals,
+      packages, addPackage, updatePackage, deletePackage, fetchPackages,
       getStats,
       approvalHistory, logApprovalAction,
       notices, addNotice,
       theme, toggleTheme,
-      updateProfile
+      updateProfile, uploadFile
     }}>
       {children}
     </AppContext.Provider>

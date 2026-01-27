@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, TrendingUp, AlertCircle, Clock, ArrowRight, Package, CheckCircle, Zap, ShieldCheck, Heart } from 'lucide-react';
+import Avatar from '../../components/Avatar';
 
 export default function BuyerDashboard() {
   const { user, transactions, proposals, listings } = useApp();
@@ -19,11 +20,21 @@ export default function BuyerDashboard() {
     <div className="max-w-7xl mx-auto space-y-10 pb-10 animate-in fade-in duration-700">
       {/* Premium Hero Greeting */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-         <div>
-            <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-               Sourcing <span className="text-blue-600">Hub</span>
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium italic">Welcome back, {user?.name || 'Visionary'}. Your circular supply chain is active.</p>
+         <div className="flex items-center gap-6">
+            <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden border-4 border-white dark:border-slate-800 shadow-xl group cursor-pointer active:scale-95 transition-all" onClick={() => navigate('/buyer/profile')}>
+               <Avatar 
+                  src={user?.avatar_url}
+                  name={user?.full_name || user?.name || 'User'}
+                  alt="Profile"
+                  debug={true}
+               />
+            </div>
+            <div>
+               <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+                  Sourcing <span className="text-blue-600">Hub</span>
+               </h1>
+               <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium italic">Welcome back, {user?.full_name || user?.name || 'Visionary'}. Circular supply chain active.</p>
+            </div>
          </div>
          <div className="flex gap-4">
             <button onClick={() => navigate('/buyer/marketplace')} className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl active:scale-95">

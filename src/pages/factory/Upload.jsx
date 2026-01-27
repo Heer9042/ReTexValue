@@ -15,7 +15,7 @@ const FABRIC_DATA = {
 };
 
 export default function FactoryUpload() {
-  const { addListing, user, settings } = useApp();
+  const { addListing, user, settings, uploadFile } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
@@ -116,18 +116,29 @@ export default function FactoryUpload() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!file) {
+        alert("Please select a media file for analysis.");
+        return;
+    }
+
     setSubmitting(true);
     try {
+        // Phase 1: Upload Media to Supabase Storage ('products' bucket)
+        const permanentUrl = await uploadFile(file, 'products');
+
+        // Phase 2: Deploy to Database
         await addListing({
           ...formData,
           factoryId: user?.id,
-          imageUrl: preview,
+          imageUrl: permanentUrl,
           aiConfidence: result?.confidence || 0,
-          aiMetadata: result // Store full analysis
+          aiMetadata: result
         });
+        
         navigate('/factory');
     } catch (err) {
-        console.error("Transmission failed", err);
+        console.error("Transmission failed:", err.message);
+        alert(err.message || "Failed to deploy inventory. Please check your network.");
     } finally {
         setSubmitting(false);
     }
@@ -148,7 +159,7 @@ export default function FactoryUpload() {
         <div className="lg:col-span-2 space-y-8">
           <div 
              className={`
-               relative border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center h-[32rem] transition-all duration-700 overflow-hidden
+               relative border-2 border-dashed rounded-4xl flex flex-col items-center justify-center h-128 transition-all duration-700 overflow-hidden
                ${dragOver ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'}
                ${preview ? 'border-none shadow-2xl' : ''}
              `}
@@ -204,7 +215,7 @@ export default function FactoryUpload() {
 
           {/* AI Result Card */}
           {result && !analyzing && (
-            <div className="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-2xl shadow-indigo-500/20 animate-in slide-in-from-bottom-8 duration-700 text-left">
+            <div className="bg-indigo-600 rounded-4xl p-8 text-white shadow-2xl shadow-indigo-500/20 animate-in slide-in-from-bottom-8 duration-700 text-left">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
                    <Sparkles className="w-6 h-6" />
@@ -249,7 +260,7 @@ export default function FactoryUpload() {
 
         {/* Right Aspect: Operational Data */}
         <div className="lg:col-span-3">
-           <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-[3rem] p-10 space-y-10 shadow-2xl shadow-slate-200/50 dark:shadow-none">
+           <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-4xl p-10 space-y-10 shadow-2xl shadow-slate-200/50 dark:shadow-none">
               
               {/* Product Hierarchy */}
               <div className="space-y-8">
@@ -312,16 +323,16 @@ export default function FactoryUpload() {
                    </div>
                  </div>
                  
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Industrial Description</label>
-                    <textarea 
-                       rows="3"
-                       value={formData.description}
-                       onChange={(e) => setFormData({...formData, description: e.target.value})}
-                       className="w-full p-6 bg-slate-50 dark:bg-slate-900/50 border-none rounded-[2rem] text-slate-900 dark:text-white font-medium outline-none focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"
-                       placeholder="Specify grade, contamination level, and current storage status..."
-                    ></textarea>
-                 </div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Industrial Description</label>
+                     <textarea 
+                        rows="3"
+                        value={formData.description}
+                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                        className="w-full p-6 bg-slate-50 dark:bg-slate-900/50 border-none rounded-4xl text-slate-900 dark:text-white font-medium outline-none focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"
+                        placeholder="Specify grade, contamination level, and current storage status..."
+                     ></textarea>
+                  </div>
               </div>
 
               {/* Section 2: Seller Information */}

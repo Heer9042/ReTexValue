@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ShoppingCart, CheckCircle, MapPin, Phone, MessageSquare, TrendingUp, Sparkles, ArrowRight, ShieldCheck, Globe, Zap, Package } from 'lucide-react';
 
 export default function Marketplace() {
-  const { user, listings, purchaseListing, settings } = useApp();
+  const { user, listings, purchaseListing, settings, initiatePayment } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
   const [purchasingId, setPurchasingId] = useState(null);
@@ -12,6 +12,7 @@ export default function Marketplace() {
   
   const categories = ['All', ...(settings?.categories || ['Cotton', 'Polyester', 'Silk', 'Wool', 'Blended'])];
 
+  // Rest of state logic...
   const liveListings = listings.filter(l => l.status === 'Live');
 
   const filteredListings = liveListings.filter(l => {
@@ -31,15 +32,29 @@ export default function Marketplace() {
         return;
     }
     
-    if (confirm(`Confirm acquisition of ${listing.quantity}kg ${listing.fabricType} for ₹${listing.price * listing.quantity}?`)) {
+    const totalPrice = listing.price * listing.quantity;
+    if (confirm(`Confirm acquisition of ${listing.quantity}kg ${listing.fabricType} for ₹${totalPrice}?`)) {
         setPurchasingId(listing.id);
         try {
-            await purchaseListing(listing);
-            alert("Acquisition Protocol Successful. Order entry created in ledger.");
-            navigate('/buyer/orders');
+            // Integrate Razorpay Payment Flow
+            const paymentResult = await initiatePayment(totalPrice, {
+               listingId: listing.id,
+               fabricType: listing.fabricType,
+               description: `Purchase of ${listing.quantity}kg ${listing.fabricType}`
+            });
+
+            if (paymentResult?.success) {
+               await purchaseListing(listing);
+               alert("Acquisition Protocol Successful. Payment ID: " + paymentResult.paymentId);
+               navigate('/buyer/orders');
+            }
         } catch (err) {
-            console.error("Purchase failed", err);
-            alert("Transaction failed. Contact support.");
+            console.error("Purchase protocol aborted", err);
+            if (err.message === "Payment cancelled") {
+               alert("Transaction cancelled by user.");
+            } else {
+               alert("Transaction failed: " + (err.message || "Unknown error"));
+            }
         } finally {
             setPurchasingId(null);
         }

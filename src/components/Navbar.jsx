@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Globe, User, LogOut, ChevronDown, Sun, Moon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import Avatar from './Avatar';
 
 export default function Navbar({ hideNavigation = false }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function Navbar({ hideNavigation = false }) {
                  <>
                   <NavLink to="/" active={isActive('/')}>Home</NavLink>
                   <NavLink to="/how-it-works" active={isActive('/how-it-works')}>How It Works</NavLink>
+                  <NavLink to="/packages" active={isActive('/packages')}>Pricing</NavLink>
                   <NavLink to="/community" active={isActive('/community')}>Community</NavLink>
                   <NavLink to="/about" active={isActive('/about')}>About</NavLink>
                   <NavLink to="/contact" active={isActive('/contact')}>Contact</NavLink>
@@ -106,10 +108,19 @@ export default function Navbar({ hideNavigation = false }) {
                   <ThemeToggle theme={theme} toggle={toggleTheme} />
 
                   <div className="flex items-center gap-4 ml-4 pl-4 border-l border-slate-200 dark:border-slate-700">
-                     <span className="text-slate-700 dark:text-slate-300 text-sm font-medium flex items-center gap-2">
-                        <User size={16} /> {user.name}
-                     </span>
-                     <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition-colors" title="Logout">
+                     <div className="flex items-center gap-2 group cursor-pointer" onClick={() => navigate(`/${user.role}/profile`)}>
+                        <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+                           <Avatar 
+                              src={user.avatar_url}
+                              name={user.full_name || user.name || 'User'}
+                              alt="Avatar"
+                           />
+                        </div>
+                        <span className="text-slate-700 dark:text-slate-300 text-sm font-medium">
+                           {user.full_name || user.name}
+                        </span>
+                     </div>
+                     <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition-colors ml-2" title="Logout">
                         <LogOut size={18} />
                      </button>
                   </div>
@@ -136,6 +147,7 @@ export default function Navbar({ hideNavigation = false }) {
         <>
           <MobileNavLink to="/" onClick={() => setIsOpen(false)}>Home</MobileNavLink>
           <MobileNavLink to="/how-it-works" onClick={() => setIsOpen(false)}>How It Works</MobileNavLink>
+          <MobileNavLink to="/packages" onClick={() => setIsOpen(false)}>Pricing</MobileNavLink>
           <MobileNavLink to="/community" onClick={() => setIsOpen(false)}>Community</MobileNavLink>
           <MobileNavLink to="/about" onClick={() => setIsOpen(false)}>About</MobileNavLink>
           <MobileNavLink to="/contact" onClick={() => setIsOpen(false)}>Contact</MobileNavLink>

@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { BarChart, BadgeDollarSign, TrendingUp, Calendar, PieChart, ShoppingBag, Leaf, Activity, Zap, Compass, ShieldCheck } from 'lucide-react';
 
 export default function Analytics() {
-  const { transactions, user } = useApp();
+  const { transactions, user, listings } = useApp();
 
   // Optimized Metrics Integration
   const totalSpentVal = transactions.filter(t => t.buyerId === user?.id).reduce((acc, t) => acc + (t.amount || 0), 0);
@@ -12,16 +12,51 @@ export default function Analytics() {
   const co2Saved = `${(totalSpentVal / 100).toFixed(0)} kg`;
   const recycledMaterialUsed = `${(totalSpentVal / 30).toFixed(0)} kg`;
 
-  const spendingTrend = [
-     { month: 'Jan', amount: 12000 },
-     { month: 'Feb', amount: 8000 },
-     { month: 'Mar', amount: 15000 },
-     { month: 'Apr', amount: 10000 },
-     { month: 'May', amount: 22000 },
-     { month: 'Jun', amount: 18400 },
-  ];
+  // Calculate dynamic spending trend (last 6 months)
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   
-  const maxSpending = Math.max(...spendingTrend.map(d => d.amount));
+  const buyerTransactions = transactions.filter(t => t.buyerId === user?.id);
+  
+  const spendingTrend = [];
+  for (let i = 5; i >= 0; i--) {
+    let m = currentMonth - i;
+    let y = currentYear;
+    if (m < 0) {
+      m += 12;
+      y -= 1;
+    }
+    const monthAmount = buyerTransactions
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === m && d.getFullYear() === y;
+      })
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
+    
+    spendingTrend.push({ month: months[m], amount: monthAmount });
+  }
+
+  const maxSpending = Math.max(...spendingTrend.map(d => d.amount), 1000); // Avoid division by zero
+
+  // Calculate dynamic material distribution
+  const boughtListingIds = buyerTransactions.map(t => t.listingId);
+  const boughtListings = listings.filter(l => boughtListingIds.includes(l.id));
+  
+  const materialDist = boughtListings.reduce((acc, l) => {
+    const cat = l.fabricCategory || l.fabricType || 'Other';
+    acc[cat] = (acc[cat] || 0) + (l.quantity || 0);
+    return acc;
+  }, {});
+
+  const totalQuantity = Object.values(materialDist).reduce((sum, q) => sum + q, 0);
+  const distributionData = Object.entries(materialDist).map(([label, quantity]) => ({
+    label,
+    percentage: totalQuantity > 0 ? `${Math.round((quantity / totalQuantity) * 100)}%` : '0%',
+    color: label.includes('Cotton') ? 'bg-emerald-500' : 
+           label.includes('Polyester') ? 'bg-blue-500' :
+           label.includes('Silk') ? 'bg-purple-500' : 'bg-slate-400'
+  }));
 
   return (
     <div className="max-w-7xl mx-auto space-y-12 pb-16 animate-in fade-in duration-700">
@@ -135,10 +170,11 @@ export default function Analytics() {
                 </div>
 
                 <div className="w-full space-y-3">
-                   <DistributionRow label="Industrial Cotton" percentage="40%" color="bg-emerald-500" />
-                   <DistributionRow label="Virgin Polyester" percentage="30%" color="bg-blue-500" />
-                   <DistributionRow label="Hybrid Blends" percentage="20%" color="bg-purple-500" />
-                   <DistributionRow label="Legacy Fiber" percentage="10%" color="bg-slate-400" />
+                   {distributionData.length > 0 ? distributionData.map((item, idx) => (
+                      <DistributionRow key={idx} label={item.label} percentage={item.percentage} color={item.color} />
+                   )) : (
+                      <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest mt-4">No Material Data Available</p>
+                   )}
                 </div>
              </div>
          </div>

@@ -39,23 +39,26 @@ export default function BulkRequest() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-       addBulkRequest({
+    try {
+       await addBulkRequest({
           ...formData,
           buyerId: user?.id || 'guest',
           buyerName: user?.name || 'Guest Buyer'
        });
-       setSubmitting(false);
        setSuccess(true);
        setTimeout(() => {
-          navigate('/buyer'); 
-       }, 2500);
-    }, 1500);
+          navigate('/buyer/proposals'); 
+       }, 2000);
+    } catch (err) {
+       console.error("Failed to submit bulk request:", err);
+       alert("Submission failed. Please try again.");
+    } finally {
+       setSubmitting(false);
+    }
   };
 
   return (

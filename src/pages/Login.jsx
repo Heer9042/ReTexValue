@@ -90,15 +90,39 @@ export default function Login() {
         // Priority: Profile (DB) > User Metadata (Auth) > Default
         const userRole = profile?.role || user.user_metadata?.role || 'buyer';
         
+        // ✨ Enhanced user object with ALL profile fields including avatar
+        let avatarUrl = profile?.avatar_url || '';
+        if (avatarUrl && avatarUrl.startsWith('http') && avatarUrl.includes('supabase') && !avatarUrl.includes('?t=')) {
+            avatarUrl = `${avatarUrl}?t=${Date.now()}`;
+            console.log('🖼️ [Login] Cache-busted avatar URL:', avatarUrl);
+        }
+        
         const appUser = {
             id: user.id,
-            name: profile?.full_name || user.user_metadata?.full_name || 'User',
             email: user.email,
             role: userRole,
-            username: profile?.username || user.user_metadata?.username
+            // Full profile data
+            full_name: profile?.full_name || user.user_metadata?.full_name || 'User',
+            name: profile?.full_name || user.user_metadata?.full_name || 'User',
+            username: profile?.username || user.user_metadata?.username || '',
+            phone: profile?.phone || '',
+            address: profile?.address || '',
+            location: profile?.location || '',
+            company_name: profile?.company_name || '',
+            gst_number: profile?.gst_number || '',
+            avatar_url: avatarUrl, // ✅ Include avatar URL
+            notifications_email: profile?.notifications_email ?? true,
+            notifications_push: profile?.notifications_push ?? true,
+            notifications_listings: profile?.notifications_listings ?? false,
+            ...profile // Include any additional profile fields
         };
 
-        console.log("Login successful:", appUser);
+        console.log("✅ Login successful:", {
+            email: appUser.email,
+            role: appUser.role,
+            avatar: appUser.avatar_url ? '✅ Has Avatar' : '❌ No Avatar'
+        });
+        
         login(appUser);
         navigate(userRole === 'admin' ? '/admin' : `/${userRole}`);
 
@@ -206,25 +230,6 @@ export default function Login() {
               Create Account
             </Link>
           </div>
-
-          <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-            <p className="text-xs text-center text-slate-400 mb-4 uppercase tracking-wider font-medium">Quick Demo Access</p>
-            <div className="grid grid-cols-3 gap-3">
-                 <button onClick={() => handleDemoLogin('admin')} className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-700/50 border border-transparent transition-all group">
-                    <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400 mb-1" />
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Admin</span>
-                 </button>
-                 <button onClick={() => handleDemoLogin('factory')} className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-200 dark:hover:border-emerald-700/50 border border-transparent transition-all group">
-                    <Factory className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mb-1" />
-                     <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Factory</span>
-                 </button>
-                 <button onClick={() => handleDemoLogin('buyer')} className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-700/50 border border-transparent transition-all group">
-                    <ShoppingBag className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mb-1" />
-                     <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Buyer</span>
-                 </button>
-            </div>
-          </div>
-
         </div>
       </div>
     </>

@@ -9,6 +9,7 @@ import Contact from './pages/Contact';
 import HowItWorks from './pages/HowItWorks';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Packages from './pages/Packages';
 
 // App Pages
 import FactoryDashboard from './pages/factory/Dashboard';
@@ -30,6 +31,7 @@ import BulkRequests from './pages/admin/BulkRequests';
 import AdminSettings from './pages/admin/Settings';
 import AdminReports from './pages/admin/Reports';
 import AdminTransactions from './pages/admin/Transactions';
+import ManagePackages from './pages/admin/ManagePackages';
 import SubmitProposal from './pages/factory/SubmitProposal';
 import FactoryProposals from './pages/factory/Proposals';
 import FactorySettings from './pages/factory/Settings';
@@ -44,14 +46,22 @@ import BuyerLayout from './components/BuyerLayout';
 // Protected Route Logic
 const ProtectedRoute = ({ children, role }) => {
   const { user, loading } = useApp();
+  const storedRole = localStorage.getItem('userRole');
 
-  if (loading) {
-     return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
-     </div>;
+  // If App is still verifying auth, but we have a persisted role, keep loading
+  if (loading || (storedRole && !user)) {
+     return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Restoring Session...</p>
+          </div>
+      </div>
+     );
   }
 
   if (!user) return <Navigate to="/login" replace />;
+  
   if (role && user.role !== role) {
       // Redirect to their dashboard instead of home if they have a role but wrong one
       if(user.role === 'admin') return <Navigate to="/admin" replace />;
@@ -83,6 +93,7 @@ function AppContent() {
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/packages" element={<Packages />} />
         
         {/* Public Community Page - Accessible to all */}
         <Route path="/community" element={
@@ -263,6 +274,13 @@ function AppContent() {
           <ProtectedRoute role="admin">
             <AdminLayout>
                <AdminTransactions />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/packages" element={
+          <ProtectedRoute role="admin">
+            <AdminLayout>
+               <ManagePackages />
             </AdminLayout>
           </ProtectedRoute>
         } />
