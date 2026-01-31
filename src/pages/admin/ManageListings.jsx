@@ -22,13 +22,18 @@ export default function ManageListings() {
   });
 
   const handleDelete = async (id) => {
-      if (window.confirm("Are you sure you want to delete this listing? This action cannot be undone.")) {
+      if (window.confirm("Are you sure you want to delete this listing? This action cannot be undone. \n\nNote: If this listing has associated transactions, it may not be deletable for audit purposes.")) {
           try {
               await deleteListing(id);
-              // Optimistic update handled by context or recheck
+              alert("Listing deleted successfully");
+              setSelectedListing(null); // Clear selected if it was this one
           } catch (error) {
               console.error("Failed to delete", error);
-              alert("Failed to delete listing");
+              if (error.message?.includes('foreign key')) {
+                  alert("Cannot delete this listing because it has associated transaction history. Try marking it as 'Sold' instead.");
+              } else {
+                  alert("Failed to delete listing: " + (error.message || "Unknown error"));
+              }
           }
       }
   };

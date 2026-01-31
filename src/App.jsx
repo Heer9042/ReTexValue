@@ -52,14 +52,19 @@ const ProtectedRoute = ({ children, role }) => {
   const { user, loading } = useApp();
   const storedRole = localStorage.getItem('userRole');
 
-  // If App is still verifying auth, but we have a persisted role, keep loading
-  if (loading || (storedRole && !user)) {
+  // 🚀 Optimization: If no data in Storage AND no user in context, redirect immediately
+  // This satisfies the "if not stored then logout/redirect" requirement without flicker.
+  const hasCredential = localStorage.getItem('retex_user') || localStorage.getItem('sb-hinwjdamhyybmolddkge-auth-token');
+  
+  if (!user && !hasCredential) {
+      return <Navigate to="/login" replace />;
+  }
+
+  // Only show loader if we ARE trying to restore a known session
+  if (loading && !user) {
      return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-          <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Restoring Session...</p>
-          </div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
       </div>
      );
   }

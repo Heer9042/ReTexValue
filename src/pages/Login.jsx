@@ -30,7 +30,6 @@ export default function Login() {
             const { error } = await supabase.auth.getSession();
             if (error) {
                 console.error("Supabase session check error:", error);
-                localStorage.clear();
             } else {
                 console.log("Supabase connection: OK");
             }

@@ -34,6 +34,17 @@ export default function PendingApprovals() {
       setEditForm({});
   };
 
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to permanently delete this pending listing?")) {
+        try {
+            await deleteListing(id);
+        } catch (error) {
+            console.error("Delete failed:", error);
+            alert("Failed to delete listing: " + (error.message || "Unknown error"));
+        }
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
@@ -50,7 +61,7 @@ export default function PendingApprovals() {
                   <div className="relative">
                       <img src={l.imageUrl} alt="Waste" className="w-full md:w-32 h-48 md:h-32 rounded-lg object-cover bg-slate-100 dark:bg-slate-700 shrink-0" />
                       {!editingId && (
-                           <button onClick={() => deleteListing(l.id)} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity" title="Delete Listing">
+                           <button onClick={() => handleDelete(l.id)} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity" title="Delete Listing">
                                <Trash2 size={14} />
                            </button>
                       )}
@@ -130,7 +141,7 @@ export default function PendingApprovals() {
                          <X size={18} /> Reject
                       </button>
                       <button 
-                         onClick={() => deleteListing(l.id)}
+                         onClick={() => handleDelete(l.id)}
                          className="md:hidden flex-1 bg-red-100 text-red-600 px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 font-medium"
                       >
                          <Trash2 size={18} /> Delete

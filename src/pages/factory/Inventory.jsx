@@ -46,7 +46,14 @@ export default function Inventory() {
   });
 
   const handleDelete = async (id) => {
-     await deleteListing(id);
+     if (window.confirm("Are you sure you want to delete this listing permanently?")) {
+         try {
+             await deleteListing(id);
+         } catch (error) {
+             console.error("Delete failed:", error);
+             alert("Failed to delete item. It may be linked to transaction history.");
+         }
+     }
   };
 
   const handleOpenAdd = () => {

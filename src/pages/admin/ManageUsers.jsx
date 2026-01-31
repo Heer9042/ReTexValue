@@ -3,7 +3,7 @@ import { Search, MoreVertical, ShieldCheck, Mail, AlertTriangle, Factory, Shoppi
 import { useApp } from '../../context/AppContext';
 
 export default function ManageUsers() {
-  const { users, setUsers, approvalHistory, logApprovalAction, updateUserStatus, deleteUser, updateUser } = useApp();
+  const { users, setUsers, approvalHistory, logApprovalAction, updateUserStatus, deleteUser, updateUser, addUser } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Factory'); // 'Factory' or 'Buyer'
@@ -24,8 +24,8 @@ export default function ManageUsers() {
   // Unified Filter Logic
   const filteredUsers = users.filter(u => {
       const matchesTab = u.role === activeTab;
-      const matchesSearch = u.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
-                            u.email.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      const matchesSearch = (u.name || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
+                            (u.email || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'All' || u.status === statusFilter;
       
       return matchesTab && matchesSearch && matchesStatus;
@@ -35,28 +35,42 @@ export default function ManageUsers() {
      updateUserStatus(id, newStatus, userName);
   };
 
-  const handleUserSubmit = (userData) => {
-      if (editingUser) {
-          // Update
-          updateUser(editingUser.id, userData);
-      } else {
-          // Create (Demo)
-          const newUser = {
-              id: Date.now(),
-              status: 'Verified', 
-              joinDate: new Date().toISOString().split('T')[0],
-              ...userData
-          };
-          setUsers([newUser, ...users]); // Fallback if no backend
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleUserSubmit = async (userData) => {
+      setIsSubmitting(true);
+      try {
+          if (editingUser) {
+              await updateUser(editingUser.id, userData);
+          } else {
+              await addUser(userData);
+          }
+          setShowAddUserModal(false);
+          setEditingUser(null);
+      } catch (err) {
+          console.error("Submission failed:", err);
+          // Alert is handled inside updateUser/addUser
+      } finally {
+          setIsSubmitting(false);
       }
-      setShowAddUserModal(false);
-      setEditingUser(null);
   };
 
-  const openAddUser = () => {
-      setEditingUser(null);
-      setShowAddUserModal(true);
-  }
+   const openAddUser = () => {
+       setEditingUser(null);
+       setShowAddUserModal(true);
+   }
+
+   const handleDeleteUser = async (id) => {
+       if (window.confirm("Are you sure you want to permanently delete this user profile? This action cannot be undone and they will lose access immediately.")) {
+           try {
+               await deleteUser(id);
+               alert("User deleted successfully"); // Added proper feedback
+           } catch (error) {
+               console.error("Delete user failed:", error);
+               alert("Failed to delete user: " + (error.message || "Unknown error"));
+           }
+       }
+   };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 transition-colors duration-300">
@@ -228,13 +242,13 @@ export default function ManageUsers() {
                                  </button>
                                  
                                  {/* Delete User Button */}
-                                 <button 
-                                     onClick={(e) => { e.stopPropagation(); deleteUser(user.id); }}
-                                     className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg border border-red-500/30 transition-colors flex items-center gap-1"
-                                     title="Delete User"
-                                 >
-                                    <Trash2 size={12} /> Delete
-                                 </button>
+                                  <button 
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteUser(user.id); }}
+                                      className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg border border-red-500/30 transition-colors flex items-center gap-1"
+                                      title="Delete User"
+                                  >
+                                     <Trash2 size={12} /> Delete
+                                  </button>
                                </div>
                             </td>
                          </tr>
@@ -260,6 +274,7 @@ export default function ManageUsers() {
               initialData={editingUser}
               onClose={() => { setShowAddUserModal(false); setEditingUser(null); }} 
               onSubmit={handleUserSubmit}
+              isSubmitting={isSubmitting}
           />
        )}
 
@@ -411,8 +426,47 @@ function UserDetailModal({ user, onClose, history }) {
 }
 
 
-function UserFormModal({ onClose, onSubmit, initialData }) {
+function UserFormModal({ onClose, onSubmit, initialData, isSubmitting }) {
     const [role, setRole] = useState(initialData?.role || 'Factory');
+    const [errors, setErrors] = useState({});
+
+    const validate = (data) => {
+        const newErrors = {};
+        
+        // Name validation
+        if (!data.name || data.name.length < 2) {
+            newErrors.name = "Name must be at least 2 characters.";
+        }
+
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(data.email)) {
+            newErrors.email = "Please enter a valid email address.";
+        }
+
+        // Phone validation (exactly 10 digits for India)
+        const phoneRegex = /^\d{10}$/;
+        if (data.phone && !phoneRegex.test(data.phone.trim())) {
+            newErrors.phone = "Phone number must be exactly 10 digits.";
+        }
+
+        // GST Validation (Simplified Indian format)
+        if (role === 'Factory' && data.gst) {
+            const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+            if (!gstRegex.test(data.gst.toUpperCase())) {
+                newErrors.gst = "Invalid GST format (e.g. 22AAAAA0000A1Z5).";
+            }
+        }
+
+        // Capacity validation
+        if (role === 'Factory' && data.capacity) {
+            if (isNaN(data.capacity) || parseFloat(data.capacity) < 0) {
+                newErrors.capacity = "Capacity must be a positive number.";
+            }
+        }
+
+        return newErrors;
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -423,6 +477,7 @@ function UserFormModal({ onClose, onSubmit, initialData }) {
             email: formData.get('email'),
             role: role,
             location: formData.get('location'),
+            address: formData.get('location'), // Map location to address for consistency
             type: formData.get('type') || (role === 'Factory' ? 'Manufacturer' : 'Brand'),
             phone: formData.get('phone'),
             // Specifics
@@ -430,6 +485,12 @@ function UserFormModal({ onClose, onSubmit, initialData }) {
             capacity: formData.get('capacity'),
             fabrics: formData.get('fabrics'),
         };
+
+        const validationErrors = validate(data);
+        if (Object.keys(validationErrors).length > 0) {
+            setErrors(validationErrors);
+            return;
+        }
         
         onSubmit(data);
     };
@@ -511,9 +572,10 @@ function UserFormModal({ onClose, onSubmit, initialData }) {
                                   name="name" 
                                   defaultValue={initialData?.name} 
                                   required 
-                                  className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 py-3 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400" 
+                                  className={`w-full bg-slate-50 dark:bg-slate-800/50 border ${errors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl pl-11 pr-4 py-3 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400`} 
                                   placeholder="Company or Contact Name" 
                                />
+                               {errors.name && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.name}</p>}
                            </div>
 
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -524,18 +586,23 @@ function UserFormModal({ onClose, onSubmit, initialData }) {
                                       type="email"
                                       defaultValue={initialData?.email} 
                                       required 
-                                      className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 py-3 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400" 
+                                      className={`w-full bg-slate-50 dark:bg-slate-800/50 border ${errors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl pl-11 pr-4 py-3 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400`} 
                                       placeholder="Email Address" 
                                   />
+                                  {errors.email && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.email}</p>}
                                </div>
                                <div className="relative">
                                   <Phone className="absolute left-3.5 top-3.5 text-slate-400 w-5 h-5" />
                                   <input 
                                       name="phone" 
+                                      type="text"
+                                      maxLength="10"
                                       defaultValue={initialData?.phone} 
-                                      className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-11 pr-4 py-3 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400" 
-                                      placeholder="Phone Number" 
+                                      onInput={(e) => e.target.value = e.target.value.replace(/[^0-9]/g, '')}
+                                      className={`w-full bg-slate-50 dark:bg-slate-800/50 border ${errors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl pl-11 pr-4 py-3 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400`} 
+                                      placeholder="Phone Number (10 digits)" 
                                   />
+                                  {errors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.phone}</p>}
                                </div>
                            </div>
 
@@ -572,15 +639,17 @@ function UserFormModal({ onClose, onSubmit, initialData }) {
                                       <label className="block text-xs font-medium text-slate-500 mb-1.5 ml-1">GST/Tax ID</label>
                                       <div className="relative">
                                           <FileText className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
-                                          <input name="gst" defaultValue={initialData?.gst} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="Tax Identification" />
+                                          <input name="gst" defaultValue={initialData?.gst} className={`w-full bg-white dark:bg-slate-900 border ${errors.gst ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-500`} placeholder="Tax Identification" />
                                       </div>
+                                      {errors.gst && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.gst}</p>}
                                    </div>
                                     <div>
                                       <label className="block text-xs font-medium text-slate-500 mb-1.5 ml-1">Monthly Capacity</label>
                                       <div className="relative">
                                           <Zap className="absolute left-3 top-2.5 text-slate-400 w-4 h-4" />
-                                          <input name="capacity" defaultValue={initialData?.capacity} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="e.g. 50 Tons" />
+                                          <input name="capacity" defaultValue={initialData?.capacity} className={`w-full bg-white dark:bg-slate-900 border ${errors.capacity ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-500`} placeholder="e.g. 50 Tons" />
                                       </div>
+                                      {errors.capacity && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.capacity}</p>}
                                    </div>
                                </div>
                                <div>
@@ -630,15 +699,20 @@ function UserFormModal({ onClose, onSubmit, initialData }) {
                         Cancel
                      </button>
                       <button 
-                        form="user-form" // Connects to the form ID since button is outside form
+                        form="user-form"
                         type="submit"
+                        disabled={isSubmitting}
                         className={`flex-1 py-3.5 rounded-xl text-white font-bold shadow-lg transition-transform hover:scale-[1.02] flex items-center justify-center gap-2 ${
                           role === 'Factory' 
                           ? 'bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20' 
                           : 'bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/20'
                       }`}>
-                         <Check size={20} />
-                         {initialData ? 'Save Changes' : `Create ${role}`}
+                         {isSubmitting ? (
+                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                         ) : (
+                           <Check size={20} />
+                         )}
+                         {isSubmitting ? 'Processing...' : (initialData ? 'Save Changes' : `Create ${role}`)}
                       </button>
                 </div>
 

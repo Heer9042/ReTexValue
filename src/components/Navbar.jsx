@@ -10,8 +10,8 @@ export default function Navbar({ hideNavigation = false }) {
   const navigate = useNavigate();
   const { user, logout, theme, toggleTheme } = useApp();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 

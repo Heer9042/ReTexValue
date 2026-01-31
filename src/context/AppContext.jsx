@@ -7,16 +7,62 @@ import blendedImg from '../assets/blended_fabric.png';
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // { id, name, role: 'factory' | 'buyer' | 'admin' }
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState([]);
-  const [listings, setListings] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [bulkRequests, setBulkRequests] = useState([]);
-  const [proposals, setProposals] = useState([]);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('retex_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(!user); // Only loading if no cached user
+  const [users, setUsers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('retex_cache_users');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [listings, setListings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('retex_cache_listings');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('retex_cache_transactions');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [bulkRequests, setBulkRequests] = useState(() => {
+    try {
+      const saved = localStorage.getItem('retex_cache_bulk');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [proposals, setProposals] = useState(() => {
+    try {
+      const saved = localStorage.getItem('retex_cache_proposals');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [reports, setReports] = useState([]);
-  const [settings, setSettings] = useState(null);
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('retex_cache_settings');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [packages, setPackages] = useState([]);
+
+  // 🛡️ Security & Integrity: Ensure local storage isn't in a partial state on load
+  useEffect(() => {
+    if (!localStorage.getItem('retex_user')) {
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('mockUser');
+        // We keep the auth-token for Supabase's own recovery, but we clear our UI markers
+    }
+  }, []);
 
   // New States for Features
   const [approvalHistory, setApprovalHistory] = useState([]);
@@ -64,6 +110,7 @@ export const AppProvider = ({ children }) => {
                   buyerId: r.buyer_id
               }));
               setBulkRequests(mappedRequests);
+              localStorage.setItem('retex_cache_bulk', JSON.stringify(mappedRequests));
           }
       } catch (error) {
           console.error("Failed to fetch bulk requests:", error.message);
@@ -82,11 +129,13 @@ export const AppProvider = ({ children }) => {
           const mode = data.find(s => s.key === 'maintenance_mode')?.value === 'true';
           const cats = data.find(s => s.key === 'supported_categories')?.value?.split(',') || [];
 
-          setSettings({
+          const currentSettings = {
                  platformFee: fee,
                  maintenanceMode: mode,
                  categories: cats.length > 0 ? cats : ['Cotton', 'Polyester']
-          });
+          };
+          setSettings(currentSettings);
+          localStorage.setItem('retex_cache_settings', JSON.stringify(currentSettings));
 
       } catch (error) {
           console.error("Failed to fetch settings:", error.message);
@@ -130,9 +179,14 @@ export const AppProvider = ({ children }) => {
           joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           location: u.location || 'N/A',
           phone: u.phone || 'N/A',
-          type: u.type || 'Standard'
+          type: u.type || 'Standard',
+          companyName: u.company_name || '',
+          address: u.address || '',
+          gst: u.gst || '',
+          capacity: u.capacity || 0
         }));
         setUsers(mappedUsers);
+        localStorage.setItem('retex_cache_users', JSON.stringify(mappedUsers));
       }
     } catch (error) {
       console.error("Failed to fetch users:", error.message);
@@ -202,6 +256,7 @@ export const AppProvider = ({ children }) => {
                 };
             });
             setListings(mappedListings);
+            localStorage.setItem('retex_cache_listings', JSON.stringify(mappedListings));
         }
       } catch (error) {
           console.error("Failed to fetch listings:", error.message);
@@ -229,74 +284,170 @@ export const AppProvider = ({ children }) => {
                 status: t.status || 'Completed'
             }));
             setTransactions(mappedTransactions);
+            localStorage.setItem('retex_cache_transactions', JSON.stringify(mappedTransactions));
         }
       } catch (error) {
           console.error("Failed to fetch transactions:", error.message);
       }
   };
 
-  const deleteUser = async (id) => {
-      if(!window.confirm("Are you sure? This will delete the user profile. They won't be able to log in.")) return;
+  const addUser = async (userData) => {
       try {
-          // Bypass DB for mock users
-          if (typeof id === 'string' && !id.includes('-')) {
-              setUsers(users.filter(u => u.id !== id));
-              return;
+          // For now, new users created via Admin are 'mock' until we implement admin-invite
+          // because auth.signUp is for public use. 
+          // However, we can create a profile for them.
+          const newUser = {
+              id: `mock_${Date.now()}`,
+              status: 'Verified',
+              joinDate: new Date().toISOString().split('T')[0],
+              ...userData
+          };
+
+          setUsers(prev => {
+              const updated = [newUser, ...prev];
+              localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+              return updated;
+          });
+          
+          alert(`${userData.role} added successfully`);
+          return newUser;
+      } catch (error) {
+          console.error("❌ [UserMgmt] Failed to add user:", error);
+          alert("Failed to add user");
+      }
+  };
+
+  const deleteUser = async (id) => {
+      try {
+          // Identify real users by UUID format (contains dashes)
+          const isRealUser = typeof id === 'string' && id.includes('-');
+          
+          if (isRealUser) {
+              // 🛡️ Manual Cascade: Clear all dependent data before deleting the profile
+              // This ensures it works even if the DB hasn't been set to CASCADE yet.
+              
+              // 1. Delete Bulk Requests (Buyer data)
+              await supabase.from('bulk_requests').delete().eq('buyer_id', id);
+              
+              // 2. Delete Listings (Factory data)
+              await supabase.from('listings').delete().eq('factory_id', id);
+              
+              // 3. Delete Proposals (Factory data)
+              await supabase.from('proposals').delete().eq('factory_id', id);
+              
+              // 4. Delete Transactions (Buyer data)
+              await supabase.from('transactions').delete().eq('buyer_id', id);
+
+              // 5. Delete notices and logs related to this user
+              await supabase.from('notices').delete().eq('user_id', id);
+              
+              // 6. Finally delete the Profile
+              const { error } = await supabase
+                 .from('profiles')
+                 .delete()
+                 .eq('id', id);
+
+              if (error) {
+                  console.error("Supabase Profile Delete Error:", error.message);
+                  throw error;
+              }
           }
 
-          const { error } = await supabase
-             .from('profiles')
-             .delete()
-             .eq('id', id);
-
-          if(error) throw error;
-          setUsers(users.filter(u => u.id !== id));
+          setUsers(prev => {
+              const updated = prev.filter(u => u.id !== id);
+              localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+              return updated;
+          });
+          
+          if (isRealUser) fetchUsers(); // Force server re-sync
+          console.log(`✅ [UserMgmt] User ${id} deleted successfully.`);
       } catch (error) {
-           console.error("Delete user failed:", error);
-           alert("Could not delete user. It may be linked to transaction history.");
+           console.error("❌ [UserMgmt] Delete user failed:", error);
+           throw error;
       }
   };
 
   const updateUserStatus = async (id, status, userName) => {
       try {
-          // If Real User (UUID with dashes), update DB
-          if (typeof id === 'string' && id.includes('-')) {
+          const isRealUser = typeof id === 'string' && id.includes('-');
+          
+          if (isRealUser) {
              const { error } = await supabase
               .from('profiles')
-              .update({ status })
+               .update({ status })
               .eq('id', id);
 
-             if(error) throw error;
+             if (error) throw error;
           }
           
-          setUsers(users.map(u => u.id === id ? { ...u, status } : u));
-          // Fix: logApprovalAction expects (action, userName), passing (status, userName) maps correctly to "Verified", "John Doe"
+          setUsers(prev => {
+              const updated = prev.map(u => u.id === id ? { ...u, status } : u);
+              localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+              return updated;
+          });
+
           if (typeof logApprovalAction === 'function') {
               logApprovalAction(status, userName); 
           }
       } catch (error) {
-          console.error("Failed to update user status:", error.message);
-          alert(`Error updating status: ${error.message}. Ensure you have admin permissions.`);
+          console.error("❌ [UserMgmt] Failed to update user status:", error.message);
+          alert(`Error updating status: ${error.message}`);
       }
   };
 
   const updateUser = async (id, updates) => {
-      try {
-           // If Mock User, skip DB
-           if (typeof id === 'string' && id.includes('-')) {
-               const { error } = await supabase
-                .from('profiles')
-                .update(updates)
-                .eq('id', id);
+    console.log(`🔄 [UserMgmt] Attempting to update user ${id}:`, updates);
+    try {
+      const isRealUser = typeof id === 'string' && id.includes('-');
 
-               if(error) throw error;
-           }
+      if (isRealUser) {
+        const dbUpdates = {
+          full_name: updates.name,
+          company_name: updates.name, // Fallback for schema
+          email: updates.email,
+          role: updates.role?.toLowerCase(),
+          location: updates.location,
+          phone: updates.phone,
+          type: updates.type,
+          gst: updates.gst,
+          capacity: updates.capacity ? parseFloat(String(updates.capacity).replace(/[^0-9.]/g, '')) : 0,
+          address: updates.address || updates.location,
+          company_type: updates.type,
+          status: updates.status
+        };
 
-           setUsers(users.map(u => u.id === id ? { ...u, ...updates } : u));
-      } catch (error) {
-          console.error("Failed to update user:", error.message);
-          alert("Failed to update user details");
+        // Remove undefined/null to prevent overwriting with nothing
+        Object.keys(dbUpdates).forEach(key => (dbUpdates[key] === undefined || dbUpdates[key] === null) && delete dbUpdates[key]);
+
+        console.log(`📤 [UserMgmt] Sending to Supabase:`, dbUpdates);
+
+        const { error } = await supabase
+          .from('profiles')
+          .update(dbUpdates)
+          .eq('id', id);
+
+        if (error) {
+          console.error(`❌ [Supabase Error]`, error);
+          throw error;
+        }
+      } else {
+        console.warn(`⚠️ [UserMgmt] ${id} is a mock user. Updating local state only.`);
       }
+
+      setUsers(prev => {
+        const updated = prev.map(u => u.id === id ? { ...u, ...updates } : u);
+        localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+        return updated;
+      });
+
+      if (isRealUser) await fetchUsers(); // Await the refresh
+      alert("User profile updated successfully");
+      return true;
+    } catch (error) {
+      console.error("❌ [UserMgmt] Update failed:", error.message);
+      alert("Error: " + error.message);
+      throw error;
+    }
   };
 
   const updateListingStatus = async (id, status) => {
@@ -346,7 +497,11 @@ export const AppProvider = ({ children }) => {
 
           if(error) throw error;
           
-          setListings(listings.map(l => l.id === id ? { ...l, ...updates } : l));
+          setListings(prev => {
+              const updated = prev.map(l => l.id === id ? { ...l, ...updates } : l);
+              localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+              return updated;
+          });
           alert("Listing updated successfully");
       } catch (error) {
           console.error("Failed to update listing:", error.message);
@@ -355,13 +510,15 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteListing = async (id) => {
-      if(!window.confirm("Are you sure you want to permanently delete this listing?")) return;
-      
       try {
           // Bypass DB for mock listings
           if (typeof id === 'string' && id.startsWith('mock')) {
-              setListings(listings.filter(l => l.id !== id));
-              return;
+              setListings(prev => {
+                  const updated = prev.filter(l => l.id !== id);
+                  localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+                  return updated;
+              });
+              return true;
           }
 
           const { error } = await supabase
@@ -369,12 +526,20 @@ export const AppProvider = ({ children }) => {
             .delete()
             .eq('id', id);
 
-          if(error) throw error;
+          if(error) {
+              console.error("Supabase error detail:", error);
+              throw error;
+          }
           
-          setListings(listings.filter(l => l.id !== id));
+          setListings(prev => {
+              const updated = prev.filter(l => l.id !== id);
+              localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+              return updated;
+          });
+          return true;
       } catch (error) {
           console.error("Failed to delete listing:", error.message);
-          alert("Failed to delete listing");
+          throw error;
       }
   };
 
@@ -406,203 +571,170 @@ export const AppProvider = ({ children }) => {
                 date: new Date(p.created_at).toISOString().split('T')[0]
             }));
             setProposals(mappedProposals);
+            localStorage.setItem('retex_cache_proposals', JSON.stringify(mappedProposals));
         }
     } catch (error) {
         console.error("Failed to fetch proposals:", error.message);
     }
   };
 
+  const fetchInitialData = React.useCallback(async () => {
+    console.log("🔄 [Backend] Initializing data fetch...");
+    await Promise.allSettled([
+        fetchUsers(),
+        fetchListings(),
+        fetchTransactions(),
+        fetchReports(),
+        fetchBulkRequests(),
+        fetchProposals(),
+        fetchSettings(),
+        fetchPackages()
+    ]);
+  }, []);
+
   useEffect(() => {
-    // specific auth check function
-    const checkUser = async () => {
+    // 1. Core Auth & Session Strategy
+    const initializeAuth = async () => {
       try {
-          const storedMock = localStorage.getItem('mockUser');
-          if (storedMock) {
-              const mu = JSON.parse(storedMock);
-              setUser(mu);
-              setLoading(false);
-              fetchInitialData();
-              return;
-          }
-
-          // ⏱️ Add timeout to prevent infinite loading
-          const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Auth check timed out')), 10000);
-          });
-
-          const authCheckPromise = (async () => {
-              const { data: { session } } = await supabase.auth.getSession();
-
-              if (session?.user) {
-                const { data: profile } = await supabase
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.user) {
+              const { data: profile } = await supabase
                   .from('profiles')
                   .select('*')
                   .eq('id', session.user.id)
                   .single();
-                  
-                if (profile) {
-                    // ✨ Enhanced avatar URL handling with cache-busting for Supabase Storage
-                    let avatarUrl = profile.avatar_url || '';
-                    if (avatarUrl && avatarUrl.startsWith('http') && avatarUrl.includes('supabase') && !avatarUrl.includes('?t=')) {
-                        avatarUrl = `${avatarUrl}?t=${Date.now()}`;
-                        console.log('🖼️ [Avatar] Cache-busted avatar URL on initial load:', avatarUrl);
-                    }
-                    
-                    const userData = {
-                        id: session.user.id,
-                        email: session.user.email,
-                        full_name: profile.full_name || '',
-                        username: profile.username || '',
-                        phone: profile.phone || '',
-                        address: profile.address || '',
-                        location: profile.location || '',
-                        company_name: profile.company_name || '',
-                        gst_number: profile.gst_number || '',
-                        role: profile.role || 'buyer',
-                        avatar_url: avatarUrl,
-                        notifications_email: profile.notifications_email ?? true,
-                        notifications_push: profile.notifications_push ?? true,
-                        notifications_listings: profile.notifications_listings ?? false,
-                        ...profile,
-                        name: profile.full_name || profile.username || ''
-                    };
-                    
-                    console.log('👤 [Auth] User profile loaded:', {
-                        id: userData.id,
-                        name: userData.full_name,
-                        avatar: userData.avatar_url ? '✅ Has Avatar' : '❌ No Avatar',
-                        role: userData.role
-                    });
-                    
-                    setUser(userData);
-                    localStorage.setItem('userRole', profile.role);
-                    fetchInitialData();
-                } else {
-                 localStorage.removeItem('userRole');
-                }
-              }
-          })();
-
-          // Race between auth check and timeout
-          await Promise.race([authCheckPromise, timeoutPromise]);
-
-      } catch (error) {
-          if (error.message === 'Auth check timed out') {
-              console.warn('⚠️ [Auth] Supabase connection timed out - showing login');
               
-              // Check if we have a stored role - if so, create mock user to let them in
-              const storedRole = localStorage.getItem('userRole');
-              if (storedRole) {
-                  console.log('🔓 [Offline] Using cached session');
-                  const offlineUser = {
-                      id: 'offline-' + Date.now(),
-                      name: 'Offline User',
-                      role: storedRole,
-                      email: 'offline@retexvalue.com',
-                      full_name: 'Offline Mode',
-                      isOffline: true
+              if (profile) {
+                  const userData = {
+                      id: session.user.id,
+                      email: session.user.email,
+                      ...profile,
+                      role: profile.role || 'buyer',
+                      avatar_url: profile.avatar_url || '',
+                      name: profile.full_name || profile.username || '',
+                      lastSync: Date.now()
                   };
-                  setUser(offlineUser);
+                  setUser(userData);
+                  localStorage.setItem('retex_user', JSON.stringify(userData));
+                  localStorage.setItem('userRole', profile.role);
+                  localStorage.removeItem('mockUser'); // Ensure real session takes over
+                  fetchInitialData();
               }
           } else {
-              console.error("❌ [Auth] Check failed:", error);
+              // 🛡️ Final Verification: If no session and NOT a mock, clear everything
+              const savedUser = localStorage.getItem('retex_user');
+              const isMock = savedUser?.includes('"id":"mock"') || localStorage.getItem('mockUser');
+              
+              if (!isMock) {
+                  console.log("👋 [Auth] No valid session found. Cleaning up local state.");
+                  setUser(null);
+                  localStorage.removeItem('retex_user');
+                  localStorage.removeItem('userRole');
+                  localStorage.removeItem('sb-hinwjdamhyybmolddkge-auth-token');
+              }
           }
+      } catch (error) {
+          console.error("❌ [Auth] Initialization failed:", error);
       } finally {
           setLoading(false);
       }
     };
 
-    const fetchInitialData = () => {
-        fetchUsers();
-        fetchListings();
-        fetchTransactions();
-        fetchReports();
-        fetchBulkRequests();
-        fetchProposals();
-        fetchSettings();
-        fetchPackages();
-    };
+    // 2. Fast-Path Data Fetch (Run immediately if we have a cached user)
+    if (user) {
+      console.log("⚡ [Init] Found cached user, starting fast-path fetch...");
+      fetchInitialData();
+    }
 
-    checkUser();
+    initializeAuth();
 
-    // Listen for changes
+    // 3. Robust Auth State Listener
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      console.log(`🔑 [Auth] Event: ${event}`);
+      
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session) {
           const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
 
           if (profile) {
-            // ✨ Enhanced avatar URL handling with cache-busting
-            let avatarUrl = profile.avatar_url || '';
-            if (avatarUrl && avatarUrl.startsWith('http') && avatarUrl.includes('supabase') && !avatarUrl.includes('?t=')) {
-                avatarUrl = `${avatarUrl}?t=${Date.now()}`;
-            }
-            
             const userData = {
                 id: session.user.id,
                 email: session.user.email,
-                full_name: profile.full_name || '',
-                username: profile.username || '',
-                phone: profile.phone || '',
-                address: profile.address || '',
-                location: profile.location || '',
-                company_name: profile.company_name || '',
-                gst_number: profile.gst_number || '',
                 role: profile.role || 'buyer',
-                avatar_url: avatarUrl,
-                notifications_email: profile.notifications_email ?? true,
-                notifications_push: profile.notifications_push ?? true,
-                notifications_listings: profile.notifications_listings ?? false,
                 ...profile,
                 name: profile.full_name || profile.username || ''
             };
             setUser(userData);
+            localStorage.setItem('retex_user', JSON.stringify(userData));
             localStorage.setItem('userRole', profile.role); 
-            localStorage.removeItem('mockUser');
             fetchInitialData();
           }
       } else if (event === 'SIGNED_OUT') {
+        console.log("🚪 [Auth] User signed out, clearing all session data.");
         setUser(null);
-        localStorage.removeItem('mockUser');
-        localStorage.removeItem('userRole');
+        setLoading(false);
+        const keysToClear = [
+          'retex_user', 'userRole', 'mockUser', 
+          'retex_cache_users', 'retex_cache_listings', 
+          'retex_cache_transactions', 'retex_cache_bulk', 
+          'retex_cache_proposals', 'retex_cache_settings',
+          'sb-hinwjdamhyybmolddkge-auth-token'
+        ];
+        keysToClear.forEach(k => localStorage.removeItem(k));
       }
     });
 
     return () => {
       if (authListener?.subscription) authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchInitialData]);
+
+  // Remove the duplicate fetch-on-user-id effect to prevent race conditions
 
   const login = async (role, credentials) => {
     if (typeof role === 'object') {
         setUser(role);
+        localStorage.setItem('retex_user', JSON.stringify(role));
         localStorage.setItem('userRole', role.role);
+        fetchInitialData();
         return;
     }
     const mockUser = { id: 'mock', name: 'Mock User', role: role, email: 'mock@test.com' };
     setUser(mockUser);
+    localStorage.setItem('retex_user', JSON.stringify(mockUser));
     localStorage.setItem('mockUser', JSON.stringify(mockUser));
     localStorage.setItem('userRole', role);
+    fetchInitialData();
   };
 
   const logout = async () => {
+      console.log("🚀 [Auth] Initiating logout...");
+      
+      // 1. Immediately wipe local state for instant UI response
+      setUser(null);
+      setLoading(false);
+      sessionStorage.clear();
+      
+      const keysToClear = [
+        'retex_user', 'userRole', 'mockUser', 
+        'retex_cache_users', 'retex_cache_listings', 
+        'retex_cache_transactions', 'retex_cache_bulk', 
+        'retex_cache_proposals', 'retex_cache_settings',
+        'sb-hinwjdamhyybmolddkge-auth-token'
+      ];
+      
+      keysToClear.forEach(k => localStorage.removeItem(k));
+
+      // 2. Perform background signout
       try {
-          setUser(null);
-          // 🛑 Explicitly remove keys as requested
-          localStorage.removeItem('mockUser');
-          localStorage.removeItem('userRole');
-          localStorage.removeItem('sb-hinwjdamhyybmolddkge-auth-token'); // Supabase Auth Token
-          
           await supabase.auth.signOut();
+          console.log("✅ [Auth] Supabase session terminated.");
       } catch (err) {
-          console.error("Logout error:", err);
-      } finally {
-          localStorage.clear();
-          sessionStorage.clear();
-          setUser(null);
+          console.error("⚠️ [Auth] Supabase signOut error (ignoring as local state is clear):", err);
       }
   };
 
@@ -884,6 +1016,7 @@ export const AppProvider = ({ children }) => {
          if (id === 'mock') {
             const updatedUser = { ...user, ...profileData };
             setUser(updatedUser);
+            localStorage.setItem('retex_user', JSON.stringify(updatedUser));
             localStorage.setItem('mockUser', JSON.stringify(updatedUser)); 
             return;
          }
@@ -931,6 +1064,7 @@ export const AppProvider = ({ children }) => {
 
          const updatedUser = { ...user, ...finalData }; 
          setUser(updatedUser);
+         localStorage.setItem('retex_user', JSON.stringify(updatedUser)); // Keep storage in sync
          console.log('✅ [Database] Profile synced successfully');
          return finalData;
 
@@ -964,8 +1098,12 @@ export const AppProvider = ({ children }) => {
                 status: 'Pending',
                 aiConfidence: listing.aiConfidence
             };
-            setListings([newListing, ...listings]);
-            return;
+            setListings(prev => {
+                const updated = [newListing, ...prev];
+                localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+                return updated;
+            });
+            return newListing;
         }
 
         const { data, error } = await supabase.from('listings').insert([{
@@ -1000,7 +1138,11 @@ export const AppProvider = ({ children }) => {
                 status: l.status,
                 aiConfidence: l.ai_confidence
             };
-            setListings([newListing, ...listings]);
+            setListings(prev => {
+                const updated = [newListing, ...prev];
+                localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+                return updated;
+            });
         }
     } catch (error) {
         console.error("Failed to add listing:", error.message);
@@ -1253,6 +1395,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+
   const deletePackage = async (id) => {
     if (!window.confirm("Are you sure you want to delete this package?")) return;
 
@@ -1274,7 +1417,7 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{ 
       user, loading, login, logout, 
-      users, setUsers, fetchUsers, updateUserStatus, deleteUser, updateUser,
+      users, setUsers, fetchUsers, updateUserStatus, deleteUser, updateUser, addUser,
       listings, addListing, updateListingStatus, updateListing, deleteListing, setListings, fetchListings,
       transactions, purchaseListing, fetchTransactions, initiatePayment,
       reports, generateReport,
