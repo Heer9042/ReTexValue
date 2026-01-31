@@ -84,7 +84,35 @@ export default function Transactions() {
                </button>
             ))}
          </div>
-         <button className="bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm shadow-xl shadow-slate-900/10 transition-all active:scale-95">
+         <button 
+            onClick={() => {
+              const headers = ['Reference ID', 'Buyer', 'Seller', 'Amount', 'Platform Fee', 'Status', 'Date'];
+              const csvRows = [
+                headers.join(','),
+                ...filteredTransactions.map(t => {
+                  const platformFee = t.commission || (t.amount * (settings?.platformFee || 5) / 100);
+                  return [
+                    `TX-${t.id.slice(0, 8).toUpperCase()}`,
+                    `"${getParticipant(t.buyerId, 'Buyer')}"`,
+                    `"${getParticipant(t.sellerId, 'Seller')}"`,
+                    t.amount,
+                    platformFee.toFixed(2),
+                    t.status || 'Completed',
+                    t.date
+                  ].join(',');
+                })
+              ];
+              const csvContent = csvRows.join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `transactions-export-${new Date().toISOString().split('T')[0]}.csv`;
+              a.click();
+              window.URL.revokeObjectURL(url);
+            }}
+            className="bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm shadow-xl shadow-slate-900/10 transition-all active:scale-95"
+         >
             <Download size={18} />
             <span>Export CSV</span>
          </button>
@@ -157,7 +185,19 @@ export default function Transactions() {
                               <StatusBadge status={t.status || 'Completed'} />
                            </td>
                            <td className="p-6">
-                              <button className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0">
+                              <button 
+                                 onClick={() => {
+                                   const invoiceContent = `INVOICE\n\nTransaction ID: TX-${t.id.slice(0, 8).toUpperCase()}\nDate: ${t.date}\n\nBuyer: ${getParticipant(t.buyerId, 'Buyer')}\nSeller: ${getParticipant(t.sellerId, 'Seller')}\n\nAmount: ₹${t.amount.toLocaleString()}\nPlatform Fee (${settings?.platformFee || 5}%): ₹${platformFee.toLocaleString()}\nNet Amount: ₹${(t.amount - platformFee).toLocaleString()}\n\nStatus: ${t.status || 'Completed'}`;
+                                   const blob = new Blob([invoiceContent], { type: 'text/plain' });
+                                   const url = window.URL.createObjectURL(blob);
+                                   const a = document.createElement('a');
+                                   a.href = url;
+                                   a.download = `invoice-TX-${t.id.slice(0, 8).toUpperCase()}.txt`;
+                                   a.click();
+                                   window.URL.revokeObjectURL(url);
+                                 }}
+                                 className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
+                              >
                                  Invoice
                               </button>
                            </td>

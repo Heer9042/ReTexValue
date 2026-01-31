@@ -1,9 +1,11 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useNavigate } from 'react-router-dom';
 import { FileText, ArrowRight } from 'lucide-react';
 
 export default function BulkRequests() {
   const { bulkRequests } = useApp();
+  const navigate = useNavigate();
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -57,10 +59,20 @@ export default function BulkRequests() {
                  </div>
                  
                  <div className="flex flex-col justify-center shrink-0 w-full md:w-48 gap-3">
-                    <button className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-lg text-sm font-bold transition-colors shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2">
+                    <button 
+                       onClick={() => {
+                         navigate(`/admin/bulk-requests/${req.id}/match`);
+                       }}
+                       className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-lg text-sm font-bold transition-colors shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                    >
                        Match Factory <ArrowRight size={16} />
                     </button>
-                    <button className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">
+                    <button 
+                       onClick={() => {
+                         navigate(`/admin/bulk-requests/${req.id}`);
+                       }}
+                       className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
+                    >
                        View Details
                     </button>
                  </div>

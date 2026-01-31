@@ -10,6 +10,7 @@ import HowItWorks from './pages/HowItWorks';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Packages from './pages/Packages';
+import ResetPassword from './pages/ResetPassword';
 
 // App Pages
 import FactoryDashboard from './pages/factory/Dashboard';
@@ -25,9 +26,12 @@ import BuyerProposals from './pages/buyer/Proposals';
 import BuyerAnalytics from './pages/buyer/Analytics';
 import AdminDashboard from './pages/admin/Dashboard';
 import ManageUsers from './pages/admin/ManageUsers';
+import ManageListings from './pages/admin/ManageListings';
 import AdminAnalytics from './pages/admin/Analytics';
 import PendingApprovals from './pages/admin/PendingApprovals';
 import BulkRequests from './pages/admin/BulkRequests';
+import AdminBulkRequestDetails from './pages/admin/BulkRequestDetails';
+import AdminMatchFactory from './pages/admin/MatchFactory';
 import AdminSettings from './pages/admin/Settings';
 import AdminReports from './pages/admin/Reports';
 import AdminTransactions from './pages/admin/Transactions';
@@ -94,6 +98,7 @@ function AppContent() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/packages" element={<Packages />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* Public Community Page - Accessible to all */}
         <Route path="/community" element={
@@ -235,6 +240,13 @@ function AppContent() {
             </AdminLayout>
           </ProtectedRoute>
         } />
+        <Route path="/admin/listings" element={
+          <ProtectedRoute role="admin">
+            <AdminLayout>
+               <ManageListings />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
         <Route path="/admin/analytics" element={
           <ProtectedRoute role="admin">
             <AdminLayout>
@@ -253,6 +265,20 @@ function AppContent() {
           <ProtectedRoute role="admin">
             <AdminLayout>
                <BulkRequests />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/bulk-requests/:id" element={
+          <ProtectedRoute role="admin">
+            <AdminLayout>
+               <AdminBulkRequestDetails />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/bulk-requests/:id/match" element={
+          <ProtectedRoute role="admin">
+            <AdminLayout>
+               <AdminMatchFactory />
             </AdminLayout>
           </ProtectedRoute>
         } />

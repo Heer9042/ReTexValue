@@ -9,6 +9,7 @@ export default function Login() {
   const { login } = useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [isResetMode, setIsResetMode] = useState(false); // New state for forgot password mode
   const [formData, setFormData] = useState({
       email: '',
       password: ''
@@ -19,6 +20,7 @@ export default function Login() {
   };
 
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState(''); // State for success messages
 
   // Check Supabase Connection on Mount
   useEffect(() => {
@@ -28,7 +30,6 @@ export default function Login() {
             const { error } = await supabase.auth.getSession();
             if (error) {
                 console.error("Supabase session check error:", error);
-                // If session check fails deeply, maybe clear stale data
                 localStorage.clear();
             } else {
                 console.log("Supabase connection: OK");
@@ -40,6 +41,61 @@ export default function Login() {
     checkConnection();
   }, []);
   
+  // Timer state for rate limiting
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+      let timer;
+      if (cooldown > 0) {
+          timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      }
+      return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const handleForgotPassword = async (e) => {
+      e.preventDefault();
+      
+      if (cooldown > 0) {
+          setError(`Please wait ${cooldown} seconds before retrying.`);
+          return;
+      }
+
+      setLoading(true);
+      setError('');
+      setSuccessMsg('');
+
+      const email = formData.email.trim();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          setError("Please enter a valid email address");
+          setLoading(false);
+          return;
+      }
+
+      try {
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+              redirectTo: window.location.origin + '/reset-password',
+          });
+
+          if (error) throw error;
+
+          setSuccessMsg("Password reset link sent! Check your inbox.");
+          setFormData({ ...formData, email: '' });
+          setCooldown(60); // 60s cooldown to prevent spamming
+      } catch (err) {
+          console.error("Reset password error:", err);
+          
+          if (err.message && err.message.toLowerCase().includes('rate limit')) {
+             setError("Too many requests. Please wait a minute before trying again.");
+             setCooldown(60); // Enforce cooldown on error too
+          } else {
+             setError(err.message || 'Failed to send reset link.');
+          }
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -140,15 +196,6 @@ export default function Login() {
     }
   };
 
-  const handleDemoLogin = (role) => {
-    setLoading(true);
-    setTimeout(() => {
-      login(role);
-      setLoading(false);
-      navigate(role === 'admin' ? '/admin' : `/${role}`);
-    }, 800);
-  };
-
   return (
     <>
       <Navbar />
@@ -159,16 +206,26 @@ export default function Login() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-300/20 dark:bg-indigo-500/10 rounded-full blur-[100px]" />
 
         <div className="max-w-md w-full bg-white dark:bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-700 p-8 shadow-2xl relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-500">
-          <h2 className="text-3xl font-bold text-center mb-2 text-slate-900 dark:text-white">Welcome Back</h2>
-          <p className="text-center text-slate-500 dark:text-slate-400 mb-8">Sign in to your account</p>
+          <h2 className="text-3xl font-bold text-center mb-2 text-slate-900 dark:text-white">
+              {isResetMode ? 'Reset Password' : 'Welcome Back'}
+          </h2>
+          <p className="text-center text-slate-500 dark:text-slate-400 mb-8">
+              {isResetMode ? 'Enter your email to receive recovery instructions' : 'Sign in to your account'}
+          </p>
 
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm border border-red-200 dark:border-red-800">
                 {error}
             </div>
           )}
+          
+          {successMsg && (
+            <div className="mb-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm border border-emerald-200 dark:border-emerald-800">
+                {successMsg}
+            </div>
+          )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={isResetMode ? handleForgotPassword : handleLogin} className="space-y-4">
              <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Email Address</label>
                 <div className="relative">
@@ -186,50 +243,74 @@ export default function Login() {
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <div className="flex justify-between items-center ml-1">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                    <a href="#" className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">Forgot password?</a>
+            {!isResetMode && (
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center ml-1">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                        <button 
+                            type="button"
+                            onClick={() => { setIsResetMode(true); setError(''); setSuccessMsg(''); }}
+                            className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+                        >
+                            Forgot password?
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input 
+                            type="password" 
+                            name="password"
+                            value={formData.password}
+                            onChange={handleChange}
+                            placeholder="Enter your password"
+                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400"
+                            required
+                            autoComplete="current-password"
+                        />
+                    </div>
                 </div>
-                <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input 
-                        type="password" 
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        placeholder="Enter your password"
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400"
-                        required
-                        autoComplete="current-password"
-                    />
-                </div>
-            </div>
+            )}
 
             <button 
                 type="submit" 
-                disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+                disabled={loading || cooldown > 0}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 mt-6 disabled:opacity-70 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
                 {loading ? (
                     <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        Signing In...
+                        {isResetMode ? 'Sending Link...' : 'Signing In...'}
                     </>
                 ) : (
                     <>
-                        Sign In <ArrowRight className="w-5 h-5" />
+                        {isResetMode ? (
+                            cooldown > 0 ? `Resend available in ${cooldown}s` : 'Send Reset Link'
+                        ) : (
+                             <>Sign In <ArrowRight className="w-5 h-5" /></>
+                        )}
                     </>
                 )}
             </button>
+            
+            {isResetMode && (
+                <button 
+                    type="button" 
+                    onClick={() => { setIsResetMode(false); setError(''); setSuccessMsg(''); }}
+                    className="w-full text-sm text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 mt-2 font-medium transition-colors"
+                >
+                    Back to Login
+                </button>
+            )}
           </form>
 
-          <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline">
-              Create Account
-            </Link>
-          </div>
+          {!isResetMode && (
+              <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                Don't have an account?{' '}
+                <Link to="/register" className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline">
+                  Create Account
+                </Link>
+              </div>
+          )}
         </div>
       </div>
     </>

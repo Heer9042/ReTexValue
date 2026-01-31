@@ -13,16 +13,23 @@ export default function Marketplace() {
   const categories = ['All', ...(settings?.categories || ['Cotton', 'Polyester', 'Silk', 'Wool', 'Blended'])];
 
   // Rest of state logic...
-  const liveListings = listings.filter(l => l.status === 'Live');
+  // Strict filtering for valid, live listings from DB
+  const liveListings = listings.filter(l => l.status === 'Live' && l.quantity > 0);
 
   const filteredListings = liveListings.filter(l => {
+    // Safety check for fields
+    const type = l.fabricType || '';
+    const category = l.fabricCategory || 'Other';
+    const location = l.location || '';
+    const shop = l.shopName || '';
+
     const matchesCategory = filter === 'All' || 
-                           l.fabricType.toLowerCase().includes(filter.toLowerCase()) || 
-                           (l.fabricCategory && l.fabricCategory === filter);
+                           type.toLowerCase().includes(filter.toLowerCase()) || 
+                           category === filter;
                            
-    const matchesSearch = l.fabricType.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (l.shopName && l.shopName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          l.location.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = type.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          shop.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          location.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -144,9 +151,10 @@ export default function Marketplace() {
               {/* Media Aspect */}
               <div className="relative h-72 overflow-hidden">
                  <img 
-                    src={listing.imageUrl} 
+                    src={listing.imageUrl || 'https://images.unsplash.com/photo-1596464716127-f9a0874e0d4d?q=80&w=3270&auto=format&fit=crop'} 
                     alt={listing.fabricType} 
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                    onError={(e) => {e.target.src = 'https://images.unsplash.com/photo-1531182312684-259837a4e610?q=80&w=3000&auto=format&fit=crop'}}
                  />
                  <div className="absolute inset-0 bg-linear-to-t from-slate-900/80 via-transparent to-transparent"></div>
                  
@@ -169,7 +177,7 @@ export default function Marketplace() {
                  </div>
 
                  <div className="absolute bottom-6 left-6 right-6 text-white">
-                    <h3 className="font-black text-2xl leading-tight uppercase tracking-tighter group-hover:text-blue-400 transition-colors uppercase">{listing.fabricType}</h3>
+                    <h3 className="font-black text-2xl leading-tight tracking-tighter group-hover:text-blue-400 transition-colors uppercase">{listing.fabricType}</h3>
                     <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-2">
                        <MapPin size={12} className="text-blue-400" /> {listing.location.split(',')[0]}
                     </div>

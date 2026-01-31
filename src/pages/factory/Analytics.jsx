@@ -1,29 +1,84 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { BarChart, BadgeDollarSign, TrendingUp, Calendar, ArrowUpRight, Zap, Globe, ShieldCheck, Activity } from 'lucide-react';
 
 export default function Analytics() {
-  const { transactions, user } = useApp();
+  const { transactions, user,listings } = useApp();
 
-  const chartData = [
-    { month: 'Jan', revenue: 12000 },
-    { month: 'Feb', revenue: 19000 },
-    { month: 'Mar', revenue: 15000 },
-    { month: 'Apr', revenue: 22000 },
-    { month: 'May', revenue: 35000 },
-    { month: 'Jun', revenue: 45000 },
-  ];
+  // 1. Core Data Filtration
+  const myTransactions = useMemo(() => 
+    transactions.filter(t => t.sellerId === user?.id), 
+  [transactions, user]);
 
-  const maxRevenue = Math.max(...chartData.map(d => d.revenue));
+  const mySoldListings = useMemo(() => 
+     listings.filter(l => l.factoryId === user?.id && l.status === 'Sold'),
+  [listings, user]);
+
+  // 2. Metrics Calculation
+  const totalRevenue = useMemo(() => 
+    myTransactions.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0),
+  [myTransactions]);
+
+  const totalVolume = useMemo(() => 
+    mySoldListings.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0),
+  [mySoldListings]);
+
+  const yieldIndex = totalVolume > 0 ? (totalRevenue / totalVolume).toFixed(2) : '0.00';
+
+  // 3. Chart Data Construction (Last 6 Months)
+  const chartData = useMemo(() => {
+     const data = [];
+     const today = new Date();
+     for (let i = 5; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthName = d.toLocaleString('default', { month: 'short' });
+        
+        const monthlyRevenue = myTransactions
+           .filter(t => {
+              const tDate = new Date(t.date);
+              return tDate.getMonth() === d.getMonth() && tDate.getFullYear() === d.getFullYear();
+           })
+           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        
+        data.push({ month: monthName, revenue: monthlyRevenue });
+     }
+     return data;
+  }, [myTransactions]);
+
+  const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1000); // Avoid divide by zero
+
+  // 4. Asset Composition (Group by Category)
+  const composition = useMemo(() => {
+     const groups = {};
+     mySoldListings.forEach(l => {
+        const cat = l.fabricCategory || 'Other';
+        if (!groups[cat]) groups[cat] = 0;
+        groups[cat] += Number(l.price) * Number(l.quantity); // Est. Value
+     });
+     
+     // Convert to array and format
+     const totalVal = Object.values(groups).reduce((a, b) => a + b, 0) || 1;
+     return Object.entries(groups)
+        .map(([name, val]) => ({
+           name,
+           value: val,
+           percentage: Math.round((val / totalVal) * 100)
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 4); // Top 4
+  }, [mySoldListings]);
+
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Performance Analytics</h1>
+    <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Performance Analytics</h1>
+           <p className="text-slate-500 dark:text-slate-400 mt-1">Live financial and impact analysis.</p>
+        </div>
         <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1 flex space-x-1">
-           <button className="px-3 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm rounded-md shadow-sm">6 Months</button>
-           <button className="px-3 py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm transition-colors">1 Year</button>
-           <button className="px-3 py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm transition-colors">All Time</button>
+           <button className="px-3 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm rounded-md shadow-sm font-medium">6 Months</button>
+           <button className="px-3 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white text-sm transition-colors">1 Year</button>
         </div>
       </div>
 
@@ -31,35 +86,35 @@ export default function Analytics() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <MetricCard 
            title="Gross Revenue" 
-           value="₹1,48,000" 
-           change="+12.5%" 
+           value={`₹${totalRevenue.toLocaleString()}`} 
+           change="+--" 
            isPositive={true}
            icon={<BadgeDollarSign />}
            color="text-emerald-500"
            bg="bg-emerald-50 dark:bg-emerald-500/10"
         />
         <MetricCard 
-           title="Yield Index" 
-           value="₹42.50/kg" 
-           change="+5.2%" 
+           title="Avg. Yield" 
+           value={`₹${yieldIndex}/kg`} 
+           change="Dynamic" 
            isPositive={true}
            icon={<TrendingUp />}
            color="text-blue-500"
            bg="bg-blue-50 dark:bg-blue-500/10"
         />
         <MetricCard 
-           title="Throughput" 
-           value="3,250 kg" 
-           change="-2.1%" 
-           isPositive={false}
+           title="Volume Sold" 
+           value={`${totalVolume.toLocaleString()} kg`} 
+           change="Total" 
+           isPositive={true}
            icon={<Activity />}
            color="text-purple-500"
            bg="bg-purple-50 dark:bg-purple-500/10"
         />
       </div>
 
-      {/* Main Signal Area */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none">
+      {/* Main Signal Area (Chart) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 md:p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none">
          <div className="flex justify-between items-center mb-12">
             <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center gap-3">
                <Calendar className="text-blue-500" /> Revenue Flow Matrix
@@ -69,18 +124,18 @@ export default function Analytics() {
             </div>
          </div>
          
-         <div className="h-64 flex items-end justify-between gap-4">
+         <div className="h-64 flex items-end justify-between gap-2 md:gap-4">
             {chartData.map((data, index) => {
-               const heightPercent = (data.revenue / maxRevenue) * 100;
+               const heightPercent = maxRevenue > 0 ? (data.revenue / maxRevenue) * 100 : 0;
                return (
                   <div key={index} className="w-full h-full flex flex-col items-center group cursor-pointer">
                      <div className="relative w-full h-full flex items-end mb-4">
-                        <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100 bg-slate-900 dark:bg-white text-white dark:text-black text-[10px] font-black py-2 px-4 rounded-xl whitespace-nowrap z-10 shadow-2xl">
+                        <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100 bg-slate-900 dark:bg-white text-white dark:text-black text-[10px] font-black py-2 px-4 rounded-xl whitespace-nowrap z-10 shadow-2xl pointer-events-none">
                            ₹{data.revenue.toLocaleString()}
                         </div>
                         <div 
-                           style={{ height: `${heightPercent}%` }} 
-                           className="w-full bg-linear-to-t from-blue-600/10 to-blue-500 dark:from-blue-500/20 dark:to-blue-400 rounded-2xl group-hover:to-emerald-400 transition-all duration-700 relative"
+                           style={{ height: `${Math.max(heightPercent, 2)}%` }} 
+                           className="w-full bg-linear-to-t from-blue-600/10 to-blue-500 dark:from-blue-500/20 dark:to-blue-400 rounded-2xl group-hover:to-emerald-400 transition-all duration-700 relative min-h-[10px]"
                         >
                            <div className="absolute top-0 w-full h-[6px] bg-white/20 dark:bg-blue-300/30 rounded-full blur-[2px]"></div>
                         </div>
@@ -95,12 +150,21 @@ export default function Analytics() {
       {/* Secondary Insights Matrix */}
       <div className="grid lg:grid-cols-5 gap-8">
          <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none">
-            <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-8">Asset Composition</h3>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-8">Revenue Composition</h3>
             <div className="space-y-8">
-               <CompositionRow name="Cotton (Pure)" percentage={45} value="₹65,000" color="bg-emerald-500" />
-               <CompositionRow name="Polyester Blend" percentage={30} value="₹42,000" color="bg-blue-500" />
-               <CompositionRow name="Waste Denim" percentage={15} value="₹21,000" color="bg-indigo-500" />
-               <CompositionRow name="Refined Silk" percentage={10} value="₹20,000" color="bg-purple-500" />
+               {composition.length > 0 ? composition.map((c, i) => (
+                  <CompositionRow 
+                     key={i}
+                     name={c.name} 
+                     percentage={c.percentage} 
+                     value={`₹${c.value.toLocaleString()}`} 
+                     color={['bg-emerald-500', 'bg-blue-500', 'bg-indigo-500', 'bg-purple-500'][i % 4]} 
+                  />
+               )) : (
+                  <div className="text-center py-10 text-slate-400">
+                     <p className="text-sm font-bold uppercase">No Sales Data</p>
+                  </div>
+               )}
             </div>
          </div>
          
@@ -112,7 +176,7 @@ export default function Analytics() {
                </div>
                <h3 className="text-2xl font-black tracking-tighter mb-4 leading-tight">Expansion Protocol Identified</h3>
                <p className="text-indigo-100 text-sm font-medium mb-10 leading-relaxed">
-                  High-yield demand detected in the <strong>Southeast Asian</strong> corridor for your current <strong>Cotton Waste</strong> inventory. Premium valuation up to 18%.
+                  High-yield demand detected in the <strong>Southeast Asian</strong> corridor for your current inventory class. Premium valuation up to 18%.
                </p>
                <button className="mt-auto bg-white text-indigo-700 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-indigo-50 flex items-center justify-center gap-3">
                   Analyze Corridor <ArrowUpRight size={16} />
@@ -130,9 +194,6 @@ function MetricCard({ title, value, change, isPositive, icon, color, bg }) {
          <div className="flex justify-between items-start">
             <div className={`w-14 h-14 rounded-2xl ${bg} ${color} flex items-center justify-center shadow-lg border border-transparent group-hover:border-inherit transition-all`}>
                {React.cloneElement(icon, { size: 28 })}
-            </div>
-            <div className={`text-[10px] font-black px-3 py-1.5 rounded-xl border ${isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'}`}>
-               {change}
             </div>
          </div>
          <div>

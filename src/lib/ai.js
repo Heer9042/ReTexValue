@@ -1,9 +1,11 @@
 /**
- * RE-TEX VISION CORE v4.2
- * -----------------------
+ * RE-TEX VISION CORE v5.0 (Enhanced Intelligence)
+ * -----------------------------------------------
  * Advanced Spectral Analysis & Material Intelligence for Textile Waste.
  * This module simulates a high-performance vision system for identifying 
  * textile fiber composition, grade, and environmental impact.
+ * 
+ * v5.0 Update: Integrated Heuristic Object Detection & Context Awareness.
  */
 
 const TEXTILE_REGISTRY = {
@@ -15,46 +17,99 @@ const TEXTILE_REGISTRY = {
     'Raw Merino Wool', 
     'High-Grade Linen Blend',
     'Mercerized Cotton',
-    'Post-Consumer Chiffon'
+    'Post-Consumer Chiffon',
+    'Bamboo Viscose',
+    'Nylon 6,6'
   ],
   grades: ['Premium (Grade A+)', 'High (Grade A)', 'Standard (Grade B)', 'Direct (Grade C)'],
   contaminationLevels: ['Zero (0%)', 'Trace (<2%)', 'Minor (<5%)', 'Moderate (<10%)']
 };
 
+// Keywords that trigger a "Non-Textile" rejection
+const REJECTION_PATTERNS = [
+  'person', 'face', 'selfie', 'car', 'bike', 'building', 'screenshot', 
+  'document', 'invoice', 'receipt', 'food', 'animal', 'cat', 'dog', 
+  'laptop', 'tree', 'sky', 'road', 'flower'
+];
+
+// Keywords that force a specific classification for realism
+const RECOGNITION_MAP = {
+  'cotton': 'Organic Cotton',
+  'denim': 'Industrial Denim Scraps',
+  'jean': 'Industrial Denim Scraps',
+  'silk': 'Mulberry Silk',
+  'saree': 'Mulberry Silk',
+  'wool': 'Raw Merino Wool',
+  'sweater': 'Raw Merino Wool',
+  'linen': 'High-Grade Linen Blend',
+  'polyester': 'Recycled Polyester (rPET)',
+  'plastic': 'Recycled Polyester (rPET)',
+  'nylon': 'Nylon 6,6',
+  'bamboo': 'Bamboo Viscose'
+};
+
 class VisionEngine {
   constructor() {
-    this.signature = "VCORE_SYSTEM_ACTIVE";
+    this.signature = "VCORE_SYSTEM_ACTIVE_V5";
     this.processingCycles = 0;
   }
 
   /**
    * Orchestrates the material identification protocol.
-   * Uses deterministic heuristics for demo stability while simulating 
-   * deep neural network latency and data depth.
+   * v5.0: Smart filename analysis + Stochastic Spectral Simulation.
    */
   async analyzeMaterial(file) {
     this.processingCycles++;
     
-    return new Promise((resolve) => {
-      // Simulate spectral scan latency
-      const processingTime = 1800 + Math.random() * 1200;
+    return new Promise((resolve, reject) => {
+      // Simulate spectral scan latency (variable for realism)
+      const processingTime = 2000 + Math.random() * 1500;
       
       setTimeout(() => {
-        // Use file properties as a seed for stable "pseudo-analysis"
+        if (!file) {
+           reject(new Error("Signal Lost: No input media stream detected."));
+           return;
+        }
+
+        const fileName = file.name.toLowerCase();
+        
+        // 1. NON-TEXTILE DETECTION PROTOCOL
+        // Check if the file is likely NOT a textile based on metadata hints
+        const isRejected = REJECTION_PATTERNS.some(keyword => fileName.includes(keyword));
+        if (isRejected) {
+           reject(new Error("Object Detection Failed: Primary subject is not identified as textile material. Please upload clear imagery of fabric waste."));
+           return;
+        }
+
+        // 2. INTELLIGENT RECOGNITION (Heuristic Bias)
+        // If the user uploads "cotton_shirt.jpg", we should be smart enough to call it Cotton.
+        let detectedType = null;
+        for (const [key, val] of Object.entries(RECOGNITION_MAP)) {
+           if (fileName.includes(key)) {
+              detectedType = val;
+              break;
+           }
+        }
+
+        // Use file properties as a seed for stable "pseudo-analysis" if no heuristic match
         const seed = file.size + file.name.length;
         
-        // Material Identification
+        // 3. MATERIAL IDENTIFICATION
         const typeIndex = seed % TEXTILE_REGISTRY.types.length;
+        const finalType = detectedType || TEXTILE_REGISTRY.types[typeIndex];
+        
         const gradeIndex = seed % TEXTILE_REGISTRY.grades.length;
         const contaminationIndex = seed % TEXTILE_REGISTRY.contaminationLevels.length;
         
-        const fabricType = TEXTILE_REGISTRY.types[typeIndex];
-        const grade = TEXTILE_REGISTRY.grades[gradeIndex];
-        const confidence = 89 + (seed % 10.5).toFixed(1);
+        // Confidence boost if we found a keyword match
+        const baseConfidence = detectedType ? 96.5 : (88 + (seed % 10.5));
+        const confidence = baseConfidence.toFixed(1);
         
         // Sustainability Impact Matrix (Simulated based on material type)
-        const co2SavedPerKg = 1.2 + (typeIndex * 0.4); // kg of CO2
-        const waterSavedPerKg = 150 + (typeIndex * 400); // Litres
+        // Heuristic: Synthetics save less water but more CO2 compared to virgin? 
+        // Logic: Standardized weights for simulation.
+        const co2SavedPerKg = 1.2 + (typeIndex * 0.4); 
+        const waterSavedPerKg = 150 + (typeIndex * 400); 
         
         // Commercial Valuation Logic
         const baseValue = 35 + (typeIndex * 15);
@@ -63,9 +118,9 @@ class VisionEngine {
 
         resolve({
           id: `vcore_${Date.now()}`,
-          fabricType,
-          fabricCategory: this._inferCategory(fabricType),
-          grade,
+          fabricType: finalType,
+          fabricCategory: this._inferCategory(finalType),
+          grade: TEXTILE_REGISTRY.grades[gradeIndex],
           confidence,
           estimatedValue,
           contamination: TEXTILE_REGISTRY.contaminationLevels[contaminationIndex],
@@ -91,6 +146,8 @@ class VisionEngine {
     if (type.includes('Wool')) return 'Wool';
     if (type.includes('Denim')) return 'Denim';
     if (type.includes('Linen')) return 'Linen';
+    if (type.includes('Nylon')) return 'Nylon';
+    if (type.includes('Bamboo')) return 'Viscose';
     return 'Other';
   }
 

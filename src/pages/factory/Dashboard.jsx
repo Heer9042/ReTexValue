@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { DollarSign, Scale, Leaf, ArrowRight, Activity, Plus, Package, TrendingUp, BarChart3, Recycle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import blendedImg from '../../assets/blended_fabric.png';
 
 export default function FactoryDashboard() {
   const { user, listings, getStats, bulkRequests, transactions } = useApp();
@@ -97,7 +98,12 @@ export default function FactoryDashboard() {
                           <tr key={listing.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                              <td className="px-6 py-4">
                                 <div className="flex items-center gap-3">
-                                   <img src={listing.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover bg-slate-100" />
+                                   <img 
+                                      src={listing.imageUrl} 
+                                      onError={(e) => { e.target.onerror = null; e.target.src = blendedImg; }}
+                                      alt="" 
+                                      className="w-10 h-10 rounded-lg object-cover bg-slate-100" 
+                                   />
                                    <span className="font-medium text-slate-900 dark:text-white">{listing.fabricType}</span>
                                 </div>
                              </td>
@@ -233,4 +239,3 @@ function StatusBadge({ status }) {
       </span>
    );
 }
-

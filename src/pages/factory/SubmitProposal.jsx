@@ -26,26 +26,30 @@ export default function SubmitProposal() {
     }
   }, [requestId, bulkRequests]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
-    setTimeout(() => {
-      submitProposal({
+    try {
+      await submitProposal({
          requestId: request.id,
          requestTitle: `${request.fabricType} (${request.fabricCategory})`,
          buyerId: request.buyerId,
-         factoryId: 'factory1', // Mock factory ID
-         factoryName: 'Surat Textiles Hub', // Mock factory name
+         factoryId: user?.id,
+         factoryName: user?.company_name || user?.name || 'Verified Factory',
          pricePerKg: formData.pricePerKg,
          totalPrice: Number(formData.pricePerKg) * Number(request.quantity),
          deliveryDate: formData.deliveryDate,
          message: formData.message,
       });
-      setSubmitting(false);
-      navigate('/factory');
       alert('Proposal Submitted Successfully!');
-    }, 1500);
+      navigate('/factory/proposals');
+    } catch (error) {
+      console.error("Proposal submission failed:", error);
+      alert("Failed to submit proposal. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!request) return <div className="p-10 text-center text-slate-500">Loading Request Details...</div>;

@@ -30,11 +30,30 @@ export default function Analytics() {
           </div>
           
           <div className="flex gap-3">
-             <button className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">
+             <button 
+                onClick={() => {
+                  const ranges = ['All Time', 'Last 6 Months', 'Last Year'];
+                  const currentIndex = ranges.indexOf(timeRange);
+                  setTimeRange(ranges[(currentIndex + 1) % ranges.length]);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm"
+             >
                 <Calendar size={18} />
                 <span>{timeRange}</span>
              </button>
-             <button className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all hover:scale-105">
+             <button 
+                onClick={() => {
+                  const csvContent = `Platform Analytics Report\nGenerated: ${new Date().toLocaleString()}\n\nMetric,Value\nWaste Diverted,${stats.totalWasteSold.toLocaleString()} kg\nCarbon Offset,${stats.co2Saved.toLocaleString()} kg\nPlatform Revenue,₹${stats.totalRevenue.toLocaleString()}\nUser Growth,${users.length}`;
+                  const blob = new Blob([csvContent], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `platform-analytics-${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
+             >
                 <Download size={18} />
                 <span>Download Report</span>
              </button>

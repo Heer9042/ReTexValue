@@ -10,7 +10,7 @@ export default function FactoryProposals() {
   // Filtering proposals made BY this factory or TO this factory? 
   // Assuming 'Factory' role submits proposals TO buyers' requests.
   // Filter proposals for the current user/factory (assuming 'factory1' for demo or user.id)
-  const myProposals = proposals.filter(p => p.factoryId === (user?.id || 'factory1'));
+  const myProposals = proposals.filter(p => p.factoryId === user?.id);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">

@@ -83,11 +83,11 @@ export default function BuyerOrders() {
                          <td className="px-8 py-6 whitespace-nowrap">
                             <span className="font-black text-slate-900 dark:text-white text-lg">₹{t.amount.toLocaleString()}</span>
                          </td>
-                         <td className="px-8 py-6">
-                            <StatusBadge status={t.status} />
-                         </td>
                          <td className="px-8 py-6 text-right font-black uppercase tracking-widest text-[9px]">
-                            <button className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:scale-110 transition-all">
+                            <button 
+                               onClick={() => handlePrintInvoice(t, listing)}
+                               className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:scale-110 transition-all"
+                            >
                                <Receipt size={14} /> PDF Invoice <ArrowUpRight size={12} />
                             </button>
                          </td>
@@ -109,6 +109,85 @@ export default function BuyerOrders() {
       </div>
     </div>
   );
+}
+
+function handlePrintInvoice(transaction, listing) {
+   const printWindow = window.open('', '', 'width=800,height=600');
+   const invoiceContent = `
+      <html>
+        <head>
+          <title>Invoice #${transaction.id}</title>
+          <style>
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #333; }
+            .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+            .logo { font-size: 24px; font-weight: 900; color: #059669; }
+            .invoice-details { text-align: right; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
+            .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+            .table th { text-align: left; border-bottom: 2px solid #eee; padding: 10px 0; font-size: 12px; text-transform: uppercase; color: #666; }
+            .table td { padding: 15px 0; border-bottom: 1px solid #eee; }
+            .total { text-align: right; font-size: 24px; font-weight: bold; color: #111; }
+            .footer { margin-top: 60px; text-align: center; font-size: 12px; color: #999; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">ReTex Value</div>
+            <div class="invoice-details">
+              <h1>INVOICE</h1>
+              <p>#${transaction.id.slice(0, 8).toUpperCase()}</p>
+              <p>Date: ${new Date(transaction.date).toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          <div class="grid">
+            <div>
+              <strong>Bill To:</strong><br/>
+              Buyer ID: ${transaction.buyerId}<br/>
+              Platform User
+            </div>
+            <div>
+               <strong>Ship From:</strong><br/>
+               ${listing.shopName || 'Verified Factory'}<br/>
+               ${listing.location || 'Warehouse A'}
+            </div>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${listing.fabricType || 'Textile Waste Stock'} (${listing.fabricCategory || 'General'})</td>
+                <td>${listing.quantity} kg</td>
+                <td>₹${listing.price}</td>
+                <td>₹${transaction.amount.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="total">
+            Total Paid: ₹${transaction.amount.toLocaleString()}
+          </div>
+
+          <div class="footer">
+            <p>Thank you for using ReTex Value. This is a computer-generated invoice.</p>
+          </div>
+          <script>
+             window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+   `;
+   
+   printWindow.document.write(invoiceContent);
+   printWindow.document.close();
 }
 
 function StatusBadge({ status }) {

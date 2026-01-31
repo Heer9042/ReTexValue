@@ -99,7 +99,19 @@ export default function Reports() {
                                   </div>
                               </div>
                               
-                              <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0">
+                              <button 
+                                 onClick={() => {
+                                   const reportContent = `Report: ${report.title || report.name}\nType: ${report.type}\nGenerated: ${new Date(report.created_at || report.date).toLocaleString()}\n\nThis is a generated ${report.type} report from the ReTexValue platform.`;
+                                   const blob = new Blob([reportContent], { type: 'text/plain' });
+                                   const url = window.URL.createObjectURL(blob);
+                                   const a = document.createElement('a');
+                                   a.href = url;
+                                   a.download = `${report.title || report.name}-${new Date(report.created_at || report.date).toISOString().split('T')[0]}.txt`;
+                                   a.click();
+                                   window.URL.revokeObjectURL(url);
+                                 }}
+                                 className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
+                              >
                                  <Download size={14} /> Download
                               </button>
                           </div>

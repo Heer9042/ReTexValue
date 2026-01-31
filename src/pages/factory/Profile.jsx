@@ -12,8 +12,48 @@ export default function FactoryProfile() {
      address: 'Plot 45, MIDC, Andheri East, Mumbai, Maharashtra',
      gst: '27AABCU9603R1Z2',
      capacity: '5000',
-     location: 'Mumbai, India'
+     location: 'Mumbai, India',
+     avatar_url: ''
   });
+
+  const [submitting, setSubmitting] = useState(false);
+
+  // Sync with user data on load
+  React.useEffect(() => {
+      if (user) {
+          setFormData({
+              name: user.full_name || user.name || '',
+              email: user.email || '',
+              phone: user.phone || '',
+              company: user.company_name || '',
+              address: user.address || '',
+              gst: user.gst_number || '',
+              location: user.location || '',
+              capacity: user.capacity || '5000',
+              avatar_url: user.avatar_url || ''
+          });
+      }
+  }, [user]);
+
+  const handleSave = async () => {
+      setSubmitting(true);
+      try {
+          await updateProfile({
+              full_name: formData.name,
+              company_name: formData.company,
+              phone: formData.phone,
+              address: formData.address,
+              location: formData.location,
+              gst_number: formData.gst
+          });
+          alert("Profile updated successfully!");
+      } catch (error) {
+          console.error("Profile update failed:", error);
+          alert("Failed to update profile.");
+      } finally {
+          setSubmitting(false);
+      }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-10">
@@ -24,8 +64,11 @@ export default function FactoryProfile() {
              <button className="flex items-center justify-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium backdrop-blur-sm transition-colors whitespace-nowrap">
                  <Share2 size={16} /> Share
              </button>
-             <button className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium shadow-lg shadow-emerald-500/20 transition-all">
-                 <Save size={16} /> Save Changes
+             <button 
+                 onClick={handleSave}
+                 disabled={submitting}
+                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50">
+                 {submitting ? 'Saving...' : <><Save size={16} /> Save Changes</>}
              </button>
          </div>
       </div>
@@ -39,7 +82,11 @@ export default function FactoryProfile() {
                   <div className="relative group cursor-pointer">
                      <div className="w-32 h-32 rounded-2xl bg-white dark:bg-slate-700 p-1 shadow-2xl rotate-3 transition-transform group-hover:rotate-0">
                         <div className="w-full h-full bg-slate-100 dark:bg-slate-600 rounded-xl flex items-center justify-center overflow-hidden">
-                           <User size={48} className="text-slate-400" />
+                           {formData.avatar_url ? (
+                               <img src={formData.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                           ) : (
+                               <User size={48} className="text-slate-400" />
+                           )}
                         </div>
                      </div>
                      <div className="absolute -bottom-2 -right-2 p-2 bg-emerald-500 dark:bg-emerald-600 text-white rounded-full shadow-lg border-4 border-white dark:border-slate-800">
@@ -47,10 +94,10 @@ export default function FactoryProfile() {
                      </div>
                   </div>
                   <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white text-center leading-tight">
-                     {formData.company}
+                     {formData.company || formData.name}
                   </h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
-                     <MapPin size={12} /> Mumbai, India
+                     <MapPin size={12} /> {formData.location || 'Location not set'}
                   </p>
                   
                   <div className="mt-6 flex gap-2">
@@ -202,4 +249,3 @@ export default function FactoryProfile() {
     </div>
   );
 }
-

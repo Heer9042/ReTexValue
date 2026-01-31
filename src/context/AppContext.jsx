@@ -175,22 +175,32 @@ export const AppProvider = ({ children }) => {
         if(error) throw error;
 
         if(data) {
-            const mappedListings = data.map(l => ({
-                id: l.id,
-                factoryId: l.factory_id || 'factory_unknown',
-                imageUrl: l.image_url || 'https://via.placeholder.com/150',
-                fabricType: l.fabric_type || 'Unknown',
-                shopName: l.shop_name || 'Unknown',
-                contact: l.contact || 'N/A',
-                email: l.email || 'N/A',
-                quantity: l.quantity || 0,
-                price: l.price || 0,
-                location: l.location || 'N/A',
-                date: l.created_at ? new Date(l.created_at).toISOString().split('T')[0] : 'N/A',
-                status: l.status || 'Pending',
-                aiConfidence: l.ai_confidence || 0,
-                description: l.description
-            }));
+            const mappedListings = data.map(l => {
+                let displayImage = l.image_url;
+                if (!displayImage || displayImage === 'null') {
+                    const type = (l.fabric_type || '').toLowerCase();
+                    if (type.includes('cotton')) displayImage = cottonImg;
+                    else if (type.includes('poly')) displayImage = polyesterImg;
+                    else displayImage = blendedImg;
+                }
+                
+                return {
+                    id: l.id,
+                    factoryId: l.factory_id || 'factory_unknown',
+                    imageUrl: displayImage,
+                    fabricType: l.fabric_type || 'Unknown',
+                    shopName: l.shop_name || 'Unknown',
+                    contact: l.contact || 'N/A',
+                    email: l.email || 'N/A',
+                    quantity: l.quantity || 0,
+                    price: l.price || 0,
+                    location: l.location || 'N/A',
+                    date: l.created_at ? new Date(l.created_at).toISOString().split('T')[0] : 'N/A',
+                    status: l.status || 'Pending',
+                    aiConfidence: l.ai_confidence || 0,
+                    description: l.description
+                };
+            });
             setListings(mappedListings);
         }
       } catch (error) {
@@ -249,7 +259,7 @@ export const AppProvider = ({ children }) => {
 
   const updateUserStatus = async (id, status, userName) => {
       try {
-          // If Mock User (ID is number or doesnt look like UUID), skip DB
+          // If Real User (UUID with dashes), update DB
           if (typeof id === 'string' && id.includes('-')) {
              const { error } = await supabase
               .from('profiles')
@@ -260,10 +270,13 @@ export const AppProvider = ({ children }) => {
           }
           
           setUsers(users.map(u => u.id === id ? { ...u, status } : u));
-          logApprovalAction(userName, 'System', status); // Log action
+          // Fix: logApprovalAction expects (action, userName), passing (status, userName) maps correctly to "Verified", "John Doe"
+          if (typeof logApprovalAction === 'function') {
+              logApprovalAction(status, userName); 
+          }
       } catch (error) {
           console.error("Failed to update user status:", error.message);
-          alert("Failed to update status in database");
+          alert(`Error updating status: ${error.message}. Ensure you have admin permissions.`);
       }
   };
 
@@ -322,6 +335,7 @@ export const AppProvider = ({ children }) => {
           if (updates.price) dbUpdates.price = updates.price;
           if (updates.description) dbUpdates.description = updates.description;
           if (updates.location) dbUpdates.location = updates.location;
+          if (updates.imageUrl) dbUpdates.image_url = updates.imageUrl;
           
           if (Object.keys(dbUpdates).length === 0) return;
 
@@ -577,8 +591,11 @@ export const AppProvider = ({ children }) => {
   const logout = async () => {
       try {
           setUser(null);
+          // 🛑 Explicitly remove keys as requested
           localStorage.removeItem('mockUser');
           localStorage.removeItem('userRole');
+          localStorage.removeItem('sb-hinwjdamhyybmolddkge-auth-token'); // Supabase Auth Token
+          
           await supabase.auth.signOut();
       } catch (err) {
           console.error("Logout error:", err);
@@ -589,68 +606,9 @@ export const AppProvider = ({ children }) => {
       }
   };
 
-  const addListing = async (listing) => {
-    try {
-        const factoryId = listing.factoryId || user?.id;
-        
-        // Handle Mock User Persistence (bypassing DB for 'mock' ID)
-        if (factoryId === 'mock') {
-            const newListing = {
-                id: `mock_lot_${Date.now()}`,
-                factoryId: 'mock',
-                imageUrl: listing.imageUrl,
-                fabricType: listing.fabricType,
-                shopName: listing.shopName || 'Mock Facility',
-                email: listing.email || 'mock@factory.com',
-                quantity: listing.quantity,
-                price: listing.price,
-                location: listing.location,
-                date: new Date().toISOString().split('T')[0],
-                status: 'Pending',
-                aiConfidence: listing.aiConfidence
-            };
-            setListings([newListing, ...listings]);
-            return;
-        }
+  // Duplicate (Removed)
 
-        const { data, error } = await supabase.from('listings').insert([{
-            factory_id: factoryId,
-            image_url: listing.imageUrl, 
-            fabric_type: listing.fabricType,
-            quantity: listing.quantity,
-            price: listing.price,
-            description: listing.description,
-            shop_name: listing.shopName,
-            email: listing.email,
-            location: listing.location,
-            ai_confidence: listing.aiConfidence,
-            status: 'Pending'
-        }]).select().single();
 
-        if (error) throw error;
-
-        if (data) {
-            const l = data;
-            const newListing = {
-                id: l.id,
-                factoryId: l.factory_id,
-                imageUrl: l.image_url,
-                fabricType: l.fabric_type,
-                shopName: l.shop_name,
-                email: l.email,
-                quantity: l.quantity,
-                price: l.price,
-                location: l.location,
-                date: new Date(l.created_at).toISOString().split('T')[0],
-                status: l.status,
-                aiConfidence: l.ai_confidence
-            };
-            setListings([newListing, ...listings]);
-        }
-    } catch (error) {
-        console.error("Failed to add listing:", error.message);
-    }
-  };
 
   const purchaseListing = async (listing) => {
     try {
@@ -986,6 +944,70 @@ export const AppProvider = ({ children }) => {
      }
   };
 
+  const addListing = async (listing) => {
+    try {
+        const factoryId = listing.factoryId || user?.id;
+        
+        // Handle Mock User Persistence (bypassing DB for 'mock' ID)
+        if (factoryId === 'mock') {
+            const newListing = {
+                id: `mock_lot_${Date.now()}`,
+                factoryId: 'mock',
+                imageUrl: listing.imageUrl,
+                fabricType: listing.fabricType,
+                shopName: listing.shopName || 'Mock Facility',
+                email: listing.email || 'mock@factory.com',
+                quantity: listing.quantity,
+                price: listing.price,
+                location: listing.location,
+                date: new Date().toISOString().split('T')[0],
+                status: 'Pending',
+                aiConfidence: listing.aiConfidence
+            };
+            setListings([newListing, ...listings]);
+            return;
+        }
+
+        const { data, error } = await supabase.from('listings').insert([{
+            factory_id: factoryId,
+            image_url: listing.imageUrl, 
+            fabric_type: listing.fabricType,
+            quantity: listing.quantity,
+            price: listing.price,
+            description: listing.description,
+            shop_name: listing.shopName,
+            email: listing.email,
+            location: listing.location,
+            ai_confidence: listing.aiConfidence,
+            status: 'Pending'
+        }]).select().single();
+
+        if (error) throw error;
+
+        if (data) {
+            const l = data;
+            const newListing = {
+                id: l.id,
+                factoryId: l.factory_id,
+                imageUrl: l.image_url,
+                fabricType: l.fabric_type,
+                shopName: l.shop_name,
+                email: l.email,
+                quantity: l.quantity,
+                price: l.price,
+                location: l.location,
+                date: new Date(l.created_at).toISOString().split('T')[0],
+                status: l.status,
+                aiConfidence: l.ai_confidence
+            };
+            setListings([newListing, ...listings]);
+        }
+    } catch (error) {
+        console.error("Failed to add listing:", error.message);
+        throw error; // Re-throw so UI can handle it
+    }
+  };
+
   const uploadFile = async (file, bucket = 'avatars') => {
     try {
         const isMock = user?.id === 'mock';
@@ -1001,8 +1023,9 @@ export const AppProvider = ({ children }) => {
         }
 
         const fileExt = file.name.split('.').pop();
+        const folder = bucket === 'products' ? 'inventory' : 'profile-pics';
         const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const filePath = `profile-pics/${fileName}`;
+        const filePath = `${folder}/${fileName}`;
 
         // Add 20s timeout for storage
         const timeoutPromise = new Promise((_, reject) => 
