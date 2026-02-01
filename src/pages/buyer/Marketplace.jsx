@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ShoppingCart, CheckCircle, MapPin, Phone, MessageSquare, TrendingUp, Sparkles, ArrowRight, ShieldCheck, Globe, Zap, Package } from 'lucide-react';
+import cottonImg from '../../assets/cotton_fabric.png';
+import polyesterImg from '../../assets/polyester_fabric.png';
+import blendedImg from '../../assets/blended_fabric.png';
 
 export default function Marketplace() {
   const { user, listings, purchaseListing, settings, initiatePayment } = useApp();
@@ -150,12 +153,18 @@ export default function Marketplace() {
            <div key={listing.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group flex flex-col h-full relative">
               {/* Media Aspect */}
               <div className="relative h-72 overflow-hidden">
-                 <img 
-                    src={listing.imageUrl || 'https://images.unsplash.com/photo-1596464716127-f9a0874e0d4d?q=80&w=3270&auto=format&fit=crop'} 
-                    alt={listing.fabricType} 
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
-                    onError={(e) => {e.target.src = 'https://images.unsplash.com/photo-1531182312684-259837a4e610?q=80&w=3000&auto=format&fit=crop'}}
-                 />
+                  <img 
+                     src={listing.imageUrl || blendedImg} 
+                     alt={listing.fabricType} 
+                      className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                      onError={(e) => {
+                         e.target.onerror = null; 
+                         const type = (listing.fabricType || '').toLowerCase();
+                         if(type.includes('cotton')) e.target.src = cottonImg;
+                         else if(type.includes('poly')) e.target.src = polyesterImg;
+                         else e.target.src = blendedImg;
+                      }}
+                   />
                  <div className="absolute inset-0 bg-linear-to-t from-slate-900/80 via-transparent to-transparent"></div>
                  
                  <div className="absolute top-4 left-4">

@@ -35,8 +35,10 @@ export default function BuyerOrders() {
          </div>
       </div>
       
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+      {/* Desktop Table View / Mobile Card View */}
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl overflow-hidden shadow-sm">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
              <thead>
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50/50 dark:bg-slate-900/30">
@@ -44,7 +46,6 @@ export default function BuyerOrders() {
                    <th className="px-8 py-6">Date of Entry</th>
                    <th className="px-8 py-6">Commercial Details</th>
                    <th className="px-8 py-6">Total Value</th>
-                   <th className="px-8 py-6">Transit Status</th>
                    <th className="px-8 py-6 text-right">Documentation</th>
                 </tr>
              </thead>
@@ -95,20 +96,69 @@ export default function BuyerOrders() {
                    );
                 }) : (
                    <tr>
-                      <td colSpan="6" className="py-32 text-center">
-                         <div className="flex flex-col items-center justify-center text-slate-400 gap-4 opacity-30">
-                            <ShoppingBag size={64} />
-                            <p className="text-sm font-black uppercase tracking-widest">No Records Found</p>
-                         </div>
+                      <td colSpan="5" className="py-32 text-center">
+                         <EmptyOrders />
                       </td>
                    </tr>
                 )}
              </tbody>
           </table>
         </div>
+
+        {/* Mobile View - Card Based */}
+        <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700/50">
+           {filteredOrders.length > 0 ? filteredOrders.map(t => {
+              const listing = listings.find(l => l.id === t.listingId) || {};
+              return (
+                 <div key={t.id} className="p-4 space-y-4">
+                    <div className="flex justify-between items-start">
+                       <div>
+                          <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1">ID: #{t.id.substring(0, 8).toUpperCase()}</p>
+                          <p className="text-xs font-bold text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                       </div>
+                       <button 
+                          onClick={() => handlePrintInvoice(t, listing)}
+                          className="p-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-500/20 shadow-sm"
+                       >
+                          <Receipt size={16} />
+                       </button>
+                    </div>
+
+                    <div className="flex gap-4 items-center">
+                       <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-50 dark:border-slate-800">
+                          <img src={listing.imageUrl || 'https://via.placeholder.com/150'} alt="" className="w-full h-full object-cover" />
+                       </div>
+                       <div className="flex-1">
+                          <h4 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight mb-1">{listing.fabricType || 'Legacy Item'}</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                             <Package size={10} /> {listing.quantity || 0} kg 
+                          </p>
+                       </div>
+                       <div className="text-right">
+                          <p className="font-black text-slate-900 dark:text-white text-sm">₹{t.amount.toLocaleString()}</p>
+                          <p className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mt-1">Paid</p>
+                       </div>
+                    </div>
+                 </div>
+              );
+           }) : (
+              <div className="py-20 px-8 text-center bg-slate-50/50 dark:bg-slate-900/30">
+                 <EmptyOrders />
+              </div>
+           )}
+        </div>
       </div>
     </div>
   );
+}
+
+function EmptyOrders() {
+   return (
+      <div className="flex flex-col items-center justify-center text-slate-400 gap-4 opacity-30">
+         <ShoppingBag size={64} />
+         <p className="text-sm font-black uppercase tracking-widest text-center">No Acquisitions Recorded</p>
+      </div>
+   );
 }
 
 function handlePrintInvoice(transaction, listing) {

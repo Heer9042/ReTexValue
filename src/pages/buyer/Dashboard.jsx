@@ -3,9 +3,13 @@ import { useApp } from '../../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, TrendingUp, AlertCircle, Clock, ArrowRight, Package, CheckCircle, Zap, ShieldCheck, Heart } from 'lucide-react';
 import Avatar from '../../components/Avatar';
+import TenderTracker from '../../components/TenderTracker';
+import cottonImg from '../../assets/cotton_fabric.png';
+import polyesterImg from '../../assets/polyester_fabric.png';
+import blendedImg from '../../assets/blended_fabric.png';
 
 export default function BuyerDashboard() {
-  const { user, transactions, proposals, listings } = useApp();
+  const { user, transactions, proposals, listings, bulkRequests } = useApp();
   const navigate = useNavigate();
 
   // Data Calculations for current authenticated buyer
@@ -16,12 +20,12 @@ export default function BuyerDashboard() {
   // Get recent available listings
   const recentListings = listings.filter(l => l.status === 'Live').slice(0, 3);
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-10 animate-in fade-in duration-700">
+   return (
+    <div className="max-w-7xl mx-auto space-y-10 pb-10">
       {/* Premium Hero Greeting */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden border-4 border-white dark:border-slate-800 shadow-xl group cursor-pointer active:scale-95 transition-all" onClick={() => navigate('/buyer/profile')}>
+            <div className="w-16 h-16 rounded-3xl overflow-hidden border-4 border-white dark:border-slate-800 shadow-xl group cursor-pointer active:scale-95 transition-all" onClick={() => navigate('/buyer/profile')}>
                <Avatar 
                   src={user?.avatar_url}
                   name={user?.full_name || user?.name || 'User'}
@@ -45,6 +49,9 @@ export default function BuyerDashboard() {
             </button>
          </div>
       </div>
+
+      {/* Tender Status Protocol - New Section */}
+      <TenderTracker requests={bulkRequests.filter(r => r.buyerId === user?.id)} />
 
       {/* Modern Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -133,8 +140,19 @@ export default function BuyerDashboard() {
             <div className="space-y-4">
                {recentListings.map(listing => (
                   <div key={listing.id} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-3xl p-4 flex gap-4 hover:shadow-2xl transition-all group cursor-pointer active:scale-95" onClick={() => navigate('/buyer/marketplace')}>
-                     <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm group-hover:scale-105 transition-transform flex-shrink-0">
-                        <img src={listing.imageUrl} alt={listing.fabricType} className="w-full h-full object-cover" />
+                     <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm group-hover:scale-105 transition-transform shrink-0">
+                        <img 
+                           src={listing.imageUrl || blendedImg} 
+                           onError={(e) => { 
+                               e.target.onerror = null; 
+                               const type = (listing.fabricType || '').toLowerCase();
+                               if(type.includes('cotton')) e.target.src = cottonImg;
+                               else if(type.includes('poly')) e.target.src = polyesterImg;
+                               else e.target.src = blendedImg;
+                           }}
+                           alt={listing.fabricType} 
+                           className="w-full h-full object-cover" 
+                        />
                      </div>
                      <div className="flex-1 flex flex-col justify-center">
                         <h4 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight group-hover:text-blue-600 transition-colors leading-tight">{listing.fabricType}</h4>
@@ -165,7 +183,7 @@ export default function BuyerDashboard() {
 
 function MetricCard({ title, value, icon, bg, footer }) {
    return (
-      <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 p-8 rounded-[2rem] shadow-xl shadow-slate-200/50 dark:shadow-none flex flex-col gap-6 transition-all group hover:border-blue-500/30">
+      <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 p-8 rounded-4xl shadow-xl shadow-slate-200/50 dark:shadow-none flex flex-col gap-6 transition-all group hover:border-blue-500/30">
          <div className={`w-14 h-14 rounded-2xl ${bg} flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm border border-transparent group-hover:border-inherit`}>
             {React.cloneElement(icon, { size: 28 })}
          </div>

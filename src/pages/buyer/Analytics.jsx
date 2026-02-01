@@ -59,7 +59,7 @@ export default function Analytics() {
   }));
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-16 animate-in fade-in duration-700">
+    <div className="max-w-7xl mx-auto space-y-12 pb-16">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
            <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">Procurement <span className="text-blue-600">Intelligence</span></h1>
@@ -113,7 +113,7 @@ export default function Analytics() {
 
       <div className="grid lg:grid-cols-3 gap-10">
          {/* Spending Signal Chart */}
-         <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none flex flex-col group">
+         <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 md:p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none flex flex-col group">
             <div className="flex justify-between items-center mb-12">
                <div>
                   <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center gap-3">
@@ -151,7 +151,7 @@ export default function Analytics() {
          </div>
 
          {/* Circular Composition */}
-         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none flex flex-col hover:border-blue-500/20 transition-all">
+         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 md:p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none flex flex-col hover:border-blue-500/20 transition-all">
              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-10">Material Stream</h3>
              
              <div className="flex-1 flex flex-col items-center justify-center">

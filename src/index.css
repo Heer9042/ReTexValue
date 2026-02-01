@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+img {
+  content-visibility: auto;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 .outfit {

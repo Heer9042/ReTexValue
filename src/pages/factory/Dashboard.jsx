@@ -3,6 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { DollarSign, Scale, Leaf, ArrowRight, Activity, Plus, Package, TrendingUp, BarChart3, Recycle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import blendedImg from '../../assets/blended_fabric.png';
+import cottonImg from '../../assets/cotton_fabric.png';
+import polyesterImg from '../../assets/polyester_fabric.png';
 
 export default function FactoryDashboard() {
   const { user, listings, getStats, bulkRequests, transactions } = useApp();
@@ -99,8 +101,14 @@ export default function FactoryDashboard() {
                              <td className="px-6 py-4">
                                 <div className="flex items-center gap-3">
                                    <img 
-                                      src={listing.imageUrl} 
-                                      onError={(e) => { e.target.onerror = null; e.target.src = blendedImg; }}
+                                      src={listing.imageUrl || blendedImg} 
+                                      onError={(e) => { 
+                                         e.target.onerror = null; 
+                                         const type = (listing.fabricType || '').toLowerCase();
+                                         if(type.includes('cotton')) e.target.src = cottonImg;
+                                         else if(type.includes('poly')) e.target.src = polyesterImg;
+                                         else e.target.src = blendedImg;
+                                      }}
                                       alt="" 
                                       className="w-10 h-10 rounded-lg object-cover bg-slate-100" 
                                    />

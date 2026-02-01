@@ -1,28 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, Check, Loader2, Send, Info, Package, DollarSign, Calendar, FileText } from 'lucide-react';
 
-const FABRIC_DATA = {
-  'Cotton': ['Organic Cotton', 'Pima Cotton', 'Egyptian Cotton', 'Recycled Cotton', 'Denim', 'Canvas', 'Poplin'],
-  'Polyester': ['Virgin Polyester', 'Recycled Polyester (rPET)', 'Microfiber', 'Fleece', 'Satin', 'Chiffon'],
-  'Silk': ['Mulberry Silk', 'Tussar Silk', 'Eri Silk', 'Muga Silk', 'Raw Silk', 'Crepe'],
-  'Wool': ['Merino Wool', 'Cashmere', 'Lambswool', 'Tweed', 'Worsted', 'Felt'],
-  'Linen': ['Pure Linen', 'Damask', 'Cambric', 'Butcher Linen'],
-  'Blended': ['Cotton-Polyester', 'Wool-Silk', 'Cotton-Spandex', 'Poly-Viscose', 'Cotton-Linen'],
-  'Other': ['Hemp', 'Bamboo', 'Rayon/Viscose', 'Nylon', 'Acrylic', 'Spandex']
-};
-
 export default function BulkRequest() {
-  const { user, addBulkRequest } = useApp();
+  const { user, addBulkRequest, listings, loading } = useApp();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Derive available fabrics from actual listings
+  const availableData = useMemo(() => {
+    const data = {};
+    // Listings are already filtered by RLS/query generally, but let's iterate all valid ones.
+    listings.forEach(l => {
+        // Ensure fabricCategory is set
+        l.fabricCategory = l.fabricCategory || 'Other';
+
+        // Only include Live listings
+        if (l.status !== 'Live') return;
+
+        // Only include if category is valid string
+        if (!l.fabricCategory) return;
+        
+        const cat = l.fabricCategory;
+        const type = l.fabricType || 'Unknown';
+        
+        if (!data[cat]) data[cat] = new Set();
+        data[cat].add(type);
+    });
+
+    const processed = {};
+    Object.keys(data).sort().forEach(cat => {
+        processed[cat] = Array.from(data[cat]).sort();
+    });
+
+    return processed;
+  }, [listings]);
+
+  const categories = Object.keys(availableData);
+
   // Form State
   const [formData, setFormData] = useState({
-    fabricCategory: 'Cotton',
-    fabricType: 'Organic Cotton',
+    fabricCategory: '',
+    fabricType: '',
     quantity: '',
     targetPrice: '',
     deadline: '',
@@ -30,12 +51,23 @@ export default function BulkRequest() {
     requirements: 'Standard',
   });
 
+  // Initialize/Update form defaults when data is loaded
+  useEffect(() => {
+      if (categories.length > 0 && !formData.fabricCategory) {
+          setFormData(prev => ({
+              ...prev,
+              fabricCategory: categories[0],
+              fabricType: availableData[categories[0]][0] || ''
+          }));
+      }
+  }, [categories, availableData, formData.fabricCategory]);
+
   const handleCategoryChange = (e) => {
     const newCategory = e.target.value;
     setFormData(prev => ({
       ...prev,
       fabricCategory: newCategory,
-      fabricType: FABRIC_DATA[newCategory][0] // Reset type
+      fabricType: availableData[newCategory]?.[0] || '' // Reset type to first available
     }));
   };
 
@@ -60,6 +92,46 @@ export default function BulkRequest() {
        setSubmitting(false);
     }
   };
+
+  if (loading) {
+      return (
+          <div className="max-w-5xl mx-auto p-12 text-center">
+              <Loader2 className="animate-spin w-12 h-12 mx-auto text-emerald-500 mb-4" />
+              <p className="text-slate-500">Loading directory...</p>
+          </div>
+      );
+  }
+
+  if (categories.length === 0) {
+      return (
+          <div className="max-w-3xl mx-auto pt-20 px-6 text-center">
+              <div className="bg-white dark:bg-slate-800 rounded-3xl p-12 shadow-xl border border-slate-100 dark:border-slate-700">
+                  <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Package className="w-10 h-10 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Marketplace Initializing</h2>
+                  <p className="text-slate-500 dark:text-slate-400 text-lg mb-8 max-w-lg mx-auto leading-relaxed">
+                     The global inventory is currently syncing. Once factories verify their stock, available materials will appear here automatically.
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="px-8 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-white rounded-xl font-bold shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition-all flex items-center justify-center gap-2"
+                      >
+                         <Loader2 className="w-4 h-4" /> Refresh Data
+                      </button>
+                      <button 
+                        onClick={() => navigate('/buyer')}
+                        className="px-8 py-3 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-slate-900/20 hover:scale-105 transition-all"
+                      >
+                        Return to Dashboard
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-10">
@@ -100,7 +172,7 @@ export default function BulkRequest() {
                             onChange={handleCategoryChange}
                             className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all appearance-none cursor-pointer"
                           >
-                            {Object.keys(FABRIC_DATA).map(category => (
+                            {categories.map(category => (
                               <option key={category} value={category}>{category}</option>
                             ))}
                           </select>
@@ -112,7 +184,7 @@ export default function BulkRequest() {
                             onChange={e => setFormData({...formData, fabricType: e.target.value})}
                             className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all appearance-none cursor-pointer"
                           >
-                              {FABRIC_DATA[formData.fabricCategory].map(type => (
+                              {(availableData[formData.fabricCategory] || []).map(type => (
                                 <option key={type} value={type}>{type}</option>
                               ))}
                           </select>

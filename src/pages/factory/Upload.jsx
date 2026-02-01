@@ -80,6 +80,7 @@ export default function FactoryUpload() {
       }));
     } catch (error) {
       console.error("AI Analysis Failed", error);
+      alert(error.message || "Failed to analyze image. Please try again.");
     } finally {
       setAnalyzing(false);
     }
@@ -131,6 +132,7 @@ export default function FactoryUpload() {
           ...formData,
           factoryId: user?.id,
           imageUrl: permanentUrl,
+          fabricCategory: result?.fabricCategory || 'Other',
           aiConfidence: result?.confidence || 0,
           aiMetadata: result
         });

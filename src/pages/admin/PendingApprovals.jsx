@@ -8,6 +8,7 @@ export default function PendingApprovals() {
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [processingId, setProcessingId] = useState(null); // Track which item is being processed
 
   const handleEdit = (listing) => {
       setEditingId(listing.id);
@@ -119,8 +120,7 @@ export default function PendingApprovals() {
                              <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg text-sm text-slate-500 dark:text-slate-400 grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div><span className="text-slate-400 dark:text-slate-500 block text-xs uppercase tracking-wider mb-1">Quantity</span> {l.quantity} kg</div>
                                 <div><span className="text-slate-400 dark:text-slate-500 block text-xs uppercase tracking-wider mb-1">Contact</span> {l.email || 'N/A'}</div>
-                                <div className="col-span-2"><span className="text-slate-400 dark:text-slate-500 block text-xs uppercase tracking-wider mb-1">Description</span> {l.description || 'No description provided.'}</div>
-                             </div>
+                            </div>
                          </>
                      )}
                   </div>
@@ -128,18 +128,42 @@ export default function PendingApprovals() {
                
                {!editingId && (
                    <div className="flex flex-row md:flex-col gap-3 w-full md:w-auto border-t md:border-t-0 border-slate-200 dark:border-slate-700/50 pt-4 md:pt-0">
-                      <button 
-                         onClick={() => updateListingStatus(l.id, 'Live')}
-                         className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 font-medium"
-                      >
-                         <Check size={18} /> Approve
-                      </button>
-                      <button 
-                         onClick={() => updateListingStatus(l.id, 'Rejected')}
-                         className="flex-1 md:flex-none bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-800 px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all font-medium"
-                      >
-                         <X size={18} /> Reject
-                      </button>
+                       <button 
+                          onClick={async () => {
+                              try {
+                                  setProcessingId(l.id);
+                                  await updateListingStatus(l.id, 'Live');
+                              } catch (err) {
+                                  console.error(err);
+                                  alert('Approval Failed: ' + (err.message || 'Server Error'));
+                              } finally {
+                                  setProcessingId(null);
+                              }
+                          }}
+                          disabled={processingId === l.id}
+                          className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                          {processingId === l.id ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <Check size={18} />} 
+                          Approve
+                       </button>
+                       <button 
+                          onClick={async () => {
+                              try {
+                                  setProcessingId(l.id);
+                                  await updateListingStatus(l.id, 'Rejected');
+                              } catch (err) {
+                                  console.error(err);
+                                  alert('Rejection Failed: ' + (err.message || 'Server Error'));
+                              } finally {
+                                  setProcessingId(null);
+                              }
+                          }}
+                          disabled={processingId === l.id}
+                          className="flex-1 md:flex-none bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-800 px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                          {processingId === l.id ? <div className="w-4 h-4 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin"/> : <X size={18} />} 
+                          Reject
+                       </button>
                       <button 
                          onClick={() => handleDelete(l.id)}
                          className="md:hidden flex-1 bg-red-100 text-red-600 px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 font-medium"

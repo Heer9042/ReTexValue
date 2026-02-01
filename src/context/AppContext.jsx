@@ -99,7 +99,7 @@ export const AppProvider = ({ children }) => {
           if(data) {
               const mappedRequests = data.map(r => ({
                   id: r.id,
-                  fabricCategory: r.fabric_type || 'Unknown', 
+                  fabricCategory: r.fabric_category || 'Other',
                   fabricType: r.fabric_type || 'Unknown',
                   quantity: r.quantity,
                   targetPrice: r.target_price,
@@ -107,7 +107,8 @@ export const AppProvider = ({ children }) => {
                   description: r.description,
                   buyerName: r.buyer_id ? `Buyer ${r.buyer_id.slice(0,4)}` : 'Guest Buyer',
                   status: r.status,
-                  buyerId: r.buyer_id
+                  buyerId: r.buyer_id,
+                  created_at: r.created_at
               }));
               setBulkRequests(mappedRequests);
               localStorage.setItem('retex_cache_bulk', JSON.stringify(mappedRequests));
@@ -243,6 +244,7 @@ export const AppProvider = ({ children }) => {
                     factoryId: l.factory_id || 'factory_unknown',
                     imageUrl: displayImage,
                     fabricType: l.fabric_type || 'Unknown',
+                    fabricCategory: l.fabric_category || 'Other', // Map the category
                     shopName: l.shop_name || 'Unknown',
                     contact: l.contact || 'N/A',
                     email: l.email || 'N/A',
@@ -451,24 +453,32 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateListingStatus = async (id, status) => {
-      try {
-          // Bypass DB for mock listings
-          if (typeof id === 'string' && id.startsWith('mock')) {
-              setListings(listings.map(l => l.id === id ? { ...l, status } : l));
-              return;
-          }
+    console.log(`🔄 Updating Status [${id}] -> ${status}`);
+    try {
+        // Bypass DB for mock listings
+        if (typeof id === 'string' && id.startsWith('mock')) {
+            console.log("Mock listing detected, local update only.");
+            setListings(listings.map(l => l.id === id ? { ...l, status } : l));
+            return;
+        }
 
-          const { error } = await supabase
-            .from('listings')
-            .update({ status })
-            .eq('id', id);
+        const { error } = await supabase
+          .from('listings')
+          .update({ status })
+          .eq('id', id);
 
-          if(error) throw error;
-          setListings(listings.map(l => l.id === id ? { ...l, status } : l));
-      } catch (error) {
-          console.error("Failed to update listing status:", error.message);
-      }
-  };
+        if(error) {
+            console.error("❌ DB Update Failed:", error);
+            throw error;
+        }
+
+        console.log("✅ DB Update Success!");
+        setListings(listings.map(l => l.id === id ? { ...l, status } : l));
+    } catch (error) {
+        console.error("Failed to update listing status:", error.message);
+        throw error; // Essential for the UI to know it failed!
+    }
+};
 
   const updateListing = async (id, updates) => {
       try {
@@ -482,6 +492,7 @@ export const AppProvider = ({ children }) => {
           // Map frontend keys to DB keys if necessary
           const dbUpdates = {};
           if (updates.fabricType) dbUpdates.fabric_type = updates.fabricType;
+          if (updates.fabricCategory) dbUpdates.fabric_category = updates.fabricCategory;
           if (updates.quantity) dbUpdates.quantity = updates.quantity;
           if (updates.price) dbUpdates.price = updates.price;
           if (updates.description) dbUpdates.description = updates.description;
@@ -796,57 +807,59 @@ export const AppProvider = ({ children }) => {
   };
 
   const addBulkRequest = async (request) => {
-    try {
-        const buyerId = user?.id;
-        
-        // Mock Bulk Request
-        if (buyerId === 'mock') {
-            const newRequest = {
-                id: `mock_req_${Date.now()}`,
-                fabricType: request.fabricType,
-                quantity: request.quantity,
-                targetPrice: request.targetPrice,
-                deadline: request.deadline,
-                description: request.description,
-                status: 'Open',
-                buyerName: user?.name || 'Mock Buyer',
-                buyerId: 'mock'
-            };
-            setBulkRequests([newRequest, ...bulkRequests]);
-            return;
-        }
+  try {
+      const buyerId = user?.id;
+      
+      // Mock Bulk Request
+      if (!buyerId || buyerId.startsWith('mock')) {
+          const newRequest = {
+              id: `mock_req_${Date.now()}`,
+              fabricType: request.fabricType,
+              quantity: request.quantity,
+              targetPrice: request.targetPrice,
+              deadline: request.deadline,
+              description: request.description,
+              status: 'Open',
+              buyerName: user?.name || 'Mock Buyer',
+              buyerId: buyerId || 'mock'
+          };
+          setBulkRequests([newRequest, ...bulkRequests]);
+          return;
+      }
 
-        const { data, error } = await supabase.from('bulk_requests').insert([{
-             buyer_id: buyerId,
-             fabric_type: request.fabricType,
-             quantity: request.quantity,
-             target_price: request.targetPrice,
-             deadline: request.deadline,
-             description: request.description,
-             status: 'Open'
-        }]).select().single();
+      const { data, error } = await supabase.from('bulk_requests').insert([{
+           buyer_id: buyerId,
+           fabric_type: request.fabricType, // Mapping 'fabricType' -> 'fabric_type'
+           quantity: request.quantity ? parseFloat(request.quantity) : 0,
+           target_price: request.targetPrice ? parseFloat(request.targetPrice) : null,
+           deadline: request.deadline,
+           description: request.description,
+           status: 'Open'
+      }]).select().single();
 
-        if (error) throw error;
+      if (error) throw error;
 
-        if(data) {
-            const r = data;
-            const newRequest = {
-                id: r.id,
-                fabricType: r.fabric_type,
-                quantity: r.quantity,
-                targetPrice: r.target_price,
-                deadline: r.deadline,
-                description: r.description,
-                status: r.status,
-                buyerName: user?.name || 'Me',
-                buyerId: user?.id
-            };
-            setBulkRequests([newRequest, ...bulkRequests]);
-        }
-    } catch (error) {
-        console.error("Failed to add bulk request:", error.message);
-    }
-  };
+      if(data) {
+          const r = data;
+          const newRequest = {
+              id: r.id,
+              fabricCategory: 'Unknown', // Not in DB for requests, but UI might need it?
+              fabricType: r.fabric_type,
+              quantity: r.quantity,
+              targetPrice: r.target_price,
+              deadline: r.deadline,
+              description: r.description,
+              status: r.status,
+              buyerName: user?.name || 'Me',
+              buyerId: user?.id
+          };
+          setBulkRequests([newRequest, ...bulkRequests]);
+      }
+  } catch (error) {
+      console.error("Failed to add bulk request:", error.message);
+      alert("Failed to submit request: " + error.message);
+  }
+};
 
   const submitProposal = async (proposal) => {
     try {
@@ -1106,21 +1119,22 @@ export const AppProvider = ({ children }) => {
             return newListing;
         }
 
-        const { data, error } = await supabase.from('listings').insert([{
-            factory_id: factoryId,
-            image_url: listing.imageUrl, 
-            fabric_type: listing.fabricType,
-            quantity: listing.quantity,
-            price: listing.price,
-            description: listing.description,
-            shop_name: listing.shopName,
-            email: listing.email,
-            location: listing.location,
-            ai_confidence: listing.aiConfidence,
-            status: 'Pending'
-        }]).select().single();
+      const { data, error } = await supabase.from('listings').insert([{
+          factory_id: factoryId,
+          image_url: listing.imageUrl, 
+          fabric_type: listing.fabricType,
+          fabric_category: listing.fabricCategory, 
+          quantity: listing.quantity,
+          price: listing.price,
+          description: listing.description,
+          shop_name: listing.shopName,
+          email: listing.email,
+          location: listing.location,
+          ai_confidence: listing.aiConfidence,
+          status: 'Pending'
+      }]).select().single();
 
-        if (error) throw error;
+      if (error) throw error;
 
         if (data) {
             const l = data;
@@ -1169,9 +1183,9 @@ export const AppProvider = ({ children }) => {
         const fileName = `${user.id}-${Date.now()}.${fileExt}`;
         const filePath = `${folder}/${fileName}`;
 
-        // Add 20s timeout for storage
+        // Add 60s timeout for storage (increased from 20s)
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Storage Sync Timed Out")), 20000)
+            setTimeout(() => reject(new Error("Storage Sync Timed Out (60s)")), 60000)
         );
 
         console.log(`📡 [Storage] Attempting upload to bucket: "${bucket}"...`);
@@ -1199,8 +1213,14 @@ export const AppProvider = ({ children }) => {
             return publicUrl;
 
         } catch (innerErr) {
-            // FALLBACK: If Supabase Storage is not set up, don't crash the UI.
-            // Use DataURL so the profile still works for the current user session.
+            // CRITICAL: For 'products', we MUST NOT use DataURL fallback because the base64 string
+            // is too large for the database 'image_url' column, causing the insert to hang/fail.
+            if (bucket === 'products') {
+                console.error("❌ [Storage] Listings must use cloud storage. Fallback disabled.");
+                throw innerErr; 
+            }
+
+            // FALLBACK: Only for avatars or other small assets
             console.info("💡 [Storage] Using Local DataURL Fallback...");
             return new Promise((resolve) => {
                 const reader = new FileReader();

@@ -17,6 +17,7 @@ export default function Inventory() {
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({
       fabricType: '',
+      fabricCategory: 'Other', 
       quantity: '',
       price: '',
       description: '',
@@ -60,6 +61,7 @@ export default function Inventory() {
       setModalMode('add');
       setFormData({
           fabricType: '',
+          fabricCategory: 'Other',
           quantity: '',
           price: '',
           description: '',
@@ -74,6 +76,7 @@ export default function Inventory() {
       setEditId(listing.id);
       setFormData({
           fabricType: listing.fabricType,
+          fabricCategory: listing.fabricCategory || 'Other',
           quantity: listing.quantity,
           price: listing.price,
           description: listing.description || '',
@@ -92,7 +95,8 @@ export default function Inventory() {
           const url = await uploadFile(file, 'products');
           setFormData(prev => ({ ...prev, imageUrl: url }));
       } catch (error) {
-          alert('Upload failed: ' + error.message);
+          console.error("Inventory Upload Error:", error);
+          alert('Upload failed: ' + (error.message || "Unknown error"));
       } finally {
           setIsLoading(false);
       }
@@ -220,6 +224,7 @@ export default function Inventory() {
                      <td className="px-8 py-6">
                        <div className="w-16 h-16 rounded-2xl border border-slate-100 dark:border-slate-600 overflow-hidden shadow-sm group-hover:scale-110 transition-transform bg-white dark:bg-slate-800">
                           <img 
+                            name="inventory-thumb"
                             src={listing.imageUrl || blendedImg} 
                             onError={(e) => { e.target.onerror = null; e.target.src = blendedImg; }}
                             alt={listing.fabricType} 
@@ -349,6 +354,25 @@ export default function Inventory() {
                                 onChange={e => setFormData({...formData, fabricType: e.target.value})}
                                 className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl px-4 py-3 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none font-medium"
                              />
+                        </div>
+
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Fabric Category</label>
+                             <select
+                                value={formData.fabricCategory}
+                                onChange={e => setFormData({...formData, fabricCategory: e.target.value})}
+                                className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl px-4 py-3 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none font-medium appearance-none"
+                             >
+                                <option value="Cotton">Cotton</option>
+                                <option value="Polyester">Polyester</option>
+                                <option value="Silk">Silk</option>
+                                <option value="Wool">Wool</option>
+                                <option value="Denim">Denim</option>
+                                <option value="Linen">Linen</option>
+                                <option value="Nylon">Nylon</option>
+                                <option value="Viscose">Viscose</option>
+                                <option value="Other">Other</option>
+                             </select>
                         </div>
 
                         <div className="space-y-2">

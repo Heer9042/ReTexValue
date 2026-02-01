@@ -17,6 +17,7 @@ import FactoryDashboard from './pages/factory/Dashboard';
 import FactoryUpload from './pages/factory/Upload';
 import FactoryInventory from './pages/factory/Inventory';
 import FactoryAnalytics from './pages/factory/Analytics';
+import FactoryBulkRequests from './pages/factory/BulkRequests';
 import Marketplace from './pages/buyer/Marketplace';
 import BuyerDashboard from './pages/buyer/Dashboard';
 import BuyerOrders from './pages/buyer/Orders';
@@ -92,7 +93,7 @@ function ScrollToTop() {
 
 function AppContent() {
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-200 outfit selection:bg-emerald-500/30 transition-colors duration-300">
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-200 outfit selection:bg-emerald-500/30">
       <ScrollToTop />
       <Routes>
         {/* Public Routes */}
@@ -132,6 +133,13 @@ function AppContent() {
           <ProtectedRoute role="factory">
             <FactoryLayout>
                <FactoryInventory />
+            </FactoryLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/factory/bulk-requests" element={
+          <ProtectedRoute role="factory">
+            <FactoryLayout>
+               <FactoryBulkRequests />
             </FactoryLayout>
           </ProtectedRoute>
         } />

@@ -235,7 +235,7 @@ export default function BuyerProfile() {
 
          {/* Configuration Core */}
          <div className="lg:col-span-8 space-y-10">
-            <form onSubmit={handleSave} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-4xl p-12 shadow-2xl shadow-slate-200/50 dark:shadow-none">
+            <form onSubmit={handleSave} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-4xl p-6 md:p-12 shadow-2xl shadow-slate-200/50 dark:shadow-none">
                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-slate-50 dark:border-slate-800 pb-10">
                   <div>
                      <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Operational Identity</h2>
@@ -294,7 +294,7 @@ export default function BuyerProfile() {
             </form>
 
             {/* Verified Documentation Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[3rem] flex flex-col md:flex-row gap-8 items-center shadow-2xl shadow-slate-200/50 dark:shadow-none">
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 md:p-10 rounded-[3rem] flex flex-col md:flex-row gap-8 items-center shadow-2xl shadow-slate-200/50 dark:shadow-none">
                <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-3xl flex items-center justify-center shrink-0">
                   <Award size={32} />
                </div>

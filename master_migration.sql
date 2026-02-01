@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS public.market_regions (
 -- 2. STORAGE SETUP
 -- ----------------------------------------------------------
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('avatars', 'avatars', true)
+VALUES ('avatars', 'avatars', true), ('products', 'products', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. HELPER FUNCTIONS & TRIGGERS
@@ -211,3 +211,9 @@ CREATE POLICY "Avatar Public Access" ON storage.objects FOR SELECT USING ( bucke
 
 DROP POLICY IF EXISTS "Authenticated users can upload avatars" ON storage.objects;
 CREATE POLICY "Authenticated users can upload avatars" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'avatars' AND auth.role() = 'authenticated' );
+
+DROP POLICY IF EXISTS "Products Public Access" ON storage.objects;
+CREATE POLICY "Products Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 'products' );
+
+DROP POLICY IF EXISTS "Authenticated users can upload products" ON storage.objects;
+CREATE POLICY "Authenticated users can upload products" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'products' AND auth.role() = 'authenticated' );

@@ -73,13 +73,13 @@ class VisionEngine {
 
         const fileName = file.name.toLowerCase();
         
-        // 1. NON-TEXTILE DETECTION PROTOCOL
+        // 1. NON-TEXTILE DETECTION PROTOCOL (DISABLED FOR USABILITY)
         // Check if the file is likely NOT a textile based on metadata hints
-        const isRejected = REJECTION_PATTERNS.some(keyword => fileName.includes(keyword));
+        /* const isRejected = REJECTION_PATTERNS.some(keyword => fileName.includes(keyword));
         if (isRejected) {
            reject(new Error("Object Detection Failed: Primary subject is not identified as textile material. Please upload clear imagery of fabric waste."));
            return;
-        }
+        } */
 
         // 2. INTELLIGENT RECOGNITION (Heuristic Bias)
         // If the user uploads "cotton_shirt.jpg", we should be smart enough to call it Cotton.

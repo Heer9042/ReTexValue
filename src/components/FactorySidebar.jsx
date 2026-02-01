@@ -1,10 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, UploadCloud, BarChart2, FileText, Settings, User, X } from 'lucide-react';
+import { LayoutDashboard, Package, UploadCloud, BarChart2, FileText, Settings, User, X, ShoppingCart } from 'lucide-react';
 
 export default function FactorySidebar({ isOpen, onClose }) {
   const links = [
     { name: 'Dashboard', path: '/factory', icon: <LayoutDashboard size={20} /> },
+    { name: 'Bulk Requests', path: '/factory/bulk-requests', icon: <ShoppingCart size={20} /> },
     { name: 'My Inventory', path: '/factory/inventory', icon: <Package size={20} /> },
     { name: 'Upload Stock', path: '/factory/upload', icon: <UploadCloud size={20} /> },
     { name: 'Analytics', path: '/factory/analytics', icon: <BarChart2 size={20} /> },
