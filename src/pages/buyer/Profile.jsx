@@ -9,6 +9,7 @@ export default function BuyerProfile() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = React.useRef(null);
+  const [activeTab, setActiveTab] = useState('organization');
   
   const [formData, setFormData] = useState({
     full_name: user?.full_name || user?.name || '',
@@ -21,6 +22,7 @@ export default function BuyerProfile() {
     avatar_url: user?.avatar_url || ''
   });
   const [localPreview, setLocalPreview] = useState(null);
+   const [showWalletMaintenance, setShowWalletMaintenance] = useState(false);
 
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState({});
@@ -190,14 +192,16 @@ export default function BuyerProfile() {
   return (
     <div className="max-w-7xl mx-auto space-y-12 pb-20 animate-in fade-in duration-700">
       {/* Immersive Profile Hero */}
-      <div className="relative h-64 rounded-4xl bg-slate-900 border border-white/5 overflow-hidden shadow-2xl">
-         <div className="absolute inset-0 bg-linear-to-br from-indigo-600/20 to-emerald-600/20 mix-blend-overlay"></div>
+      <div className="relative h-48 rounded-4xl bg-gradient-to-br from-slate-900 via-indigo-900 to-emerald-900 border border-white/5 overflow-hidden shadow-2xl">
+         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 to-emerald-600/20 mix-blend-overlay"></div>
          <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/10 rounded-full blur-[80px]"></div>
+         <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-[80px]"></div>
          
-         <div className="absolute bottom-10 right-10 flex gap-4">
-             <button className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest backdrop-blur-3xl transition-all border border-white/10 shadow-2xl">
-                 Update Environment
-             </button>
+         <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+               <h1 className="text-4xl font-black text-white tracking-tighter mb-2">Buyer Profile</h1>
+               <p className="text-sm text-white/60 font-medium">Manage your account and preferences</p>
+            </div>
          </div>
       </div>
 
@@ -249,10 +253,9 @@ export default function BuyerProfile() {
                </div>
                
                <div className="mt-12 space-y-2">
-                  <NavLink icon={<Building size={18} />} label="Organization Details" active />
-                  <NavLink icon={<Globe size={18} />} label="Geospatial Sites" />
-                  <NavLink icon={<CreditCard size={18} />} label="Procurement Wallet" />
-                  <NavLink icon={<Bell size={18} />} label="Signal Hub" />
+                  <NavLink icon={<Building size={18} />} label="Organization Details" active={activeTab === 'organization'} onClick={() => setActiveTab('organization')} />
+                  <NavLink icon={<CreditCard size={18} />} label="Procurement Wallet" active={activeTab === 'wallet'} onClick={() => setActiveTab('wallet')} />
+                  <NavLink icon={<Bell size={18} />} label="Signal Hub" active={activeTab === 'signals'} onClick={() => setActiveTab('signals')} />
                </div>
             </div>
 
@@ -277,6 +280,8 @@ export default function BuyerProfile() {
 
          {/* Configuration Core */}
          <div className="lg:col-span-8 space-y-10">
+            {activeTab === 'organization' && (
+            <>
             <form onSubmit={handleSave} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-4xl p-6 md:p-12 shadow-2xl shadow-slate-200/50 dark:shadow-none">
                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-slate-50 dark:border-slate-800 pb-10">
                   <div>
@@ -405,23 +410,119 @@ export default function BuyerProfile() {
                </div>
             </form>
 
-            {/* Verified Documentation Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 md:p-10 rounded-[3rem] flex flex-col md:flex-row gap-8 items-center shadow-2xl shadow-slate-200/50 dark:shadow-none">
-               <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-3xl flex items-center justify-center shrink-0">
-                  <Award size={32} />
+            </>
+            )}
+
+            {activeTab === 'wallet' && (
+               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-4xl p-6 md:p-12 shadow-2xl">
+                  <div className="flex items-center gap-4 mb-8">
+                     <div className="w-12 h-12 bg-blue-50 dark:bg-blue-500/10 text-blue-600 rounded-2xl flex items-center justify-center">
+                        <CreditCard size={24} />
+                     </div>
+                     <div>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Procurement Wallet</h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Track your spending and transactions</p>
+                     </div>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-3 gap-6 mb-8">
+                     <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white">
+                        <p className="text-xs font-bold opacity-60 mb-2">Available Balance</p>
+                        <p className="text-3xl font-black">₹0.00</p>
+                     </div>
+                     <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-3xl p-6">
+                        <p className="text-xs font-bold text-slate-500 mb-2">Total Spent</p>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white">₹0.00</p>
+                     </div>
+                     <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-3xl p-6">
+                        <p className="text-xs font-bold text-slate-500 mb-2">Pending</p>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white">₹0.00</p>
+                     </div>
+                  </div>
+                  
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                     <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Recent Transactions</h3>
+                     </div>
+                     <div className="p-6 text-center text-slate-500">
+                        <CreditCard size={40} className="mx-auto mb-4 opacity-20" />
+                        <p className="text-sm font-medium">No transactions yet</p>
+                        <button 
+                           onClick={() => setShowWalletMaintenance(true)}
+                           className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all"
+                        >
+                           Add Funds
+                        </button>
+                        {showWalletMaintenance && (
+                          <p className="mt-3 text-xs font-bold text-amber-600 dark:text-amber-400">Under maintenance</p>
+                        )}
+                     </div>
+                  </div>
                </div>
-               <div className="flex-1 text-center md:text-left">
-                  <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Circular Trust Protocol</h4>
-                  <p className="text-sm text-slate-500 font-medium mt-2">Enhance your trust rating by uploading environmental compliance documents (PCB/ISO).</p>
+            )}
+
+            {activeTab === 'signals' && (
+               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-4xl p-6 md:p-12 shadow-2xl">
+                  <div className="flex items-center gap-4 mb-8">
+                     <div className="w-12 h-12 bg-orange-50 dark:bg-orange-500/10 text-orange-600 rounded-2xl flex items-center justify-center">
+                        <Bell size={24} />
+                     </div>
+                     <div>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Signal Hub</h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Manage your notifications and alerts</p>
+                     </div>
+                  </div>
+                  
+                  <div className="space-y-6">
+                     <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Notification Preferences</h3>
+                        <div className="space-y-4">
+                           <NotificationToggle label="New Proposals" description="Get notified when factories submit proposals" />
+                           <NotificationToggle label="Order Updates" description="Track shipping and delivery status" />
+                           <NotificationToggle label="Price Alerts" description="Notify when prices drop for saved items" />
+                           <NotificationToggle label="Weekly Reports" description="Receive weekly procurement summaries" />
+                        </div>
+                     </div>
+                     
+                     <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Recent Notifications</h3>
+                        <div className="text-center py-8 text-slate-500">
+                           <Bell size={40} className="mx-auto mb-4 opacity-20" />
+                           <p className="text-sm font-medium">No recent notifications</p>
+                        </div>
+                     </div>
+                  </div>
                </div>
-               <button className="px-8 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm">
-                  Upload Vault
-               </button>
-            </div>
+            )}
          </div>
       </div>
     </div>
   );
+}
+
+function NotificationToggle({ label, description }) {
+   const [enabled, setEnabled] = useState(false);
+   
+   return (
+      <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-700 last:border-0">
+         <div>
+            <p className="font-bold text-slate-900 dark:text-white text-sm">{label}</p>
+            <p className="text-xs text-slate-500 mt-1">{description}</p>
+         </div>
+         <button
+            onClick={() => setEnabled(!enabled)}
+            className={`relative w-12 h-6 rounded-full transition-all ${
+               enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+            }`}
+         >
+            <span
+               className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  enabled ? 'translate-x-6' : 'translate-x-0'
+               }`}
+            />
+         </button>
+      </div>
+   );
 }
 
 function Badge({ icon, label }) {
@@ -432,9 +533,12 @@ function Badge({ icon, label }) {
    );
 }
 
-function NavLink({ icon, label, active }) {
+function NavLink({ icon, label, active, onClick }) {
    return (
-      <button className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-slate-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-100 dark:border-slate-700' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+      <button 
+         onClick={onClick}
+         className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-slate-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-100 dark:border-slate-700' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-200'}`}
+      >
          {icon}
          {label}
       </button>

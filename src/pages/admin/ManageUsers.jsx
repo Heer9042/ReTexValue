@@ -8,7 +8,6 @@ export default function ManageUsers() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Factory'); // 'Factory' or 'Buyer'
   const [statusFilter, setStatusFilter] = useState('All');
-  const [verificationFilter, setVerificationFilter] = useState('All'); // All, Verified, Pending, Unverified
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null); // For detailed view
@@ -56,16 +55,7 @@ export default function ManageUsers() {
                             (u.companyName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'All' || u.status === statusFilter;
       
-      let matchesVerification = true;
-      if (verificationFilter === 'Verified') {
-        matchesVerification = u.isVerified === true;
-      } else if (verificationFilter === 'Pending') {
-        matchesVerification = u.verificationStatus === 'pending';
-      } else if (verificationFilter === 'Unverified') {
-        matchesVerification = u.isVerified === false && u.verificationStatus !== 'pending';
-      }
-      
-      return matchesTab && matchesSearch && matchesStatus && matchesVerification;
+      return matchesTab && matchesSearch && matchesStatus;
   });
 
   const handleStatusChange = async (id, newStatus, userName) => {
@@ -116,17 +106,7 @@ export default function ManageUsers() {
        }
    };
 
-   const handleVerificationStatusChange = async (userId, status) => {
-       try {
-           console.log(`🔄 [ManageUsers] Updating verification for user ${userId} to ${status}`);
-           await updateVerificationStatus(userId, status);
-           console.log(`✅ [ManageUsers] Verification updated successfully to ${status}`);
-           alert(`User verification status updated to: ${status}`);
-       } catch (error) {
-           console.error("❌ [ManageUsers] Verification update failed:", error);
-           alert("Failed to update verification status: " + (error.message || "Unknown error"));
-       }
-   };
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 transition-colors duration-300">
@@ -212,20 +192,7 @@ export default function ManageUsers() {
                 <Filter className="absolute left-3 top-3 text-slate-500 w-4 h-4 pointer-events-none" />
              </div>
 
-             {/* Verification Filter */}
-             <div className="relative">
-                <select 
-                   value={verificationFilter}
-                   onChange={(e) => setVerificationFilter(e.target.value)}
-                   className="appearance-none bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 pl-10 pr-8 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none w-full sm:w-48"
-                >
-                   <option value="All">All Verification</option>
-                   <option value="Verified">✓ Verified Only</option>
-                   <option value="Pending">⏳ Pending Verification</option>
-                   <option value="Unverified">✗ Unverified</option>
-                </select>
-                <ShieldCheck className="absolute left-3 top-3 text-amber-500 w-4 h-4 pointer-events-none" />
-             </div>
+
 
              {/* Search */}
              <div className="relative w-full sm:w-64">
@@ -250,7 +217,7 @@ export default function ManageUsers() {
                       <th className="px-6 py-4 w-1/4">User Details</th>
                       <th className="px-6 py-4">Type</th>
                       <th className="px-6 py-4 w-1/6">Status</th>
-                      <th className="px-6 py-4 w-1/5">Verification</th>
+
                       <th className="px-6 py-4">Joined</th>
                       <th className="px-6 py-4 text-right w-1/4">Actions</th>
                    </tr>
@@ -280,15 +247,13 @@ export default function ManageUsers() {
                             <td className="px-6 py-4">
                                <StatusIndicator status={user.status || 'Pending'} />
                             </td>
-                            <td className="px-6 py-4">
-                               <VerificationBadge status={user.verificationStatus} isVerified={user.isVerified} />
-                            </td>
+
                             <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm whitespace-nowrap">{user.joinDate}</td>
                             <td className="px-6 py-4 text-right">
                                <UserActionsMenu 
                                   user={user} 
                                   onStatusChange={handleStatusChange}
-                                  onVerificationChange={handleVerificationStatusChange}
+
                                   onEdit={() => { setShowAddUserModal(true); setEditingUser(user); }}
                                   onDelete={handleDeleteUser}
                                />
@@ -297,7 +262,7 @@ export default function ManageUsers() {
                       ))
                    ) : (
                       <tr>
-                         <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                         <td colSpan={activeTab === 'Factory' ? 6 : 5} className="px-6 py-12 text-center text-slate-500">
                             <div className="flex flex-col items-center gap-2">
                                {isLoading ? (
                                   <>
@@ -772,7 +737,7 @@ function UserFormModal({ onClose, onSubmit, initialData, isSubmitting }) {
     );
 }
 
-function UserActionsMenu({ user, onStatusChange, onVerificationChange, onEdit, onDelete }) {
+function UserActionsMenu({ user, onStatusChange, onEdit, onDelete }) {
    const [showMenu, setShowMenu] = useState(false);
    const menuRef = React.useRef(null);
 
@@ -783,11 +748,7 @@ function UserActionsMenu({ user, onStatusChange, onVerificationChange, onEdit, o
       { label: 'Blocked', color: 'rose', icon: '⛔' }
    ];
    
-   const verificationOptions = [
-      { label: 'verified', color: 'blue', icon: '✓' },
-      { label: 'pending', color: 'cyan', icon: '⏳' },
-      { label: 'rejected', color: 'orange', icon: '✕' }
-   ];
+
 
    // Close menu when clicking outside
    React.useEffect(() => {
@@ -807,18 +768,8 @@ function UserActionsMenu({ user, onStatusChange, onVerificationChange, onEdit, o
       setShowMenu(false);
    };
 
-   const handleVerificationSelect = (status) => {
-      onVerificationChange(user.id, status);
-      setShowMenu(false);
-   };
-
    const getStatusColor = (status) => {
       const option = statusOptions.find(opt => opt.label === status);
-      return option?.color || 'slate';
-   };
-
-   const getVerificationColor = (status) => {
-      const option = verificationOptions.find(opt => opt.label === status);
       return option?.color || 'slate';
    };
 
@@ -869,49 +820,21 @@ function UserActionsMenu({ user, onStatusChange, onVerificationChange, onEdit, o
                   </div>
                </div>
 
-               {/* Verification Section */}
-               <div className="p-4 border-b border-slate-100 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-3">
-                     <ShieldCheck size={14} className="text-slate-500 dark:text-slate-400" />
-                     <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Verification</p>
-                  </div>
-                  <div className="space-y-2">
-                     {verificationOptions.map(option => {
-                        const isActive = user.verificationStatus === option.label;
-                        return (
-                           <button
-                              key={option.label}
-                              onClick={() => handleVerificationSelect(option.label)}
-                              className={`w-full px-3 py-2.5 rounded-lg text-xs font-semibold capitalize transition-all flex items-center gap-2 ${
-                                 isActive
-                                    ? `bg-${option.color}-500 dark:bg-${option.color}-600 text-white shadow-md border-2 border-${option.color}-600 dark:border-${option.color}-500`
-                                    : `bg-${option.color}-50 dark:bg-${option.color}-900/20 text-${option.color}-700 dark:text-${option.color}-300 border-2 border-${option.color}-200 dark:border-${option.color}-700 hover:bg-${option.color}-100 dark:hover:bg-${option.color}-900/40`
-                              }`}
-                           >
-                              <span>{option.icon}</span>
-                              {option.label}
-                              {isActive && <Check size={14} className="ml-auto" />}
-                           </button>
-                        );
-                     })}
-                  </div>
-               </div>
-
                {/* Actions Section */}
-               <div className="p-4 bg-slate-50 dark:bg-slate-900/30 space-y-2">
+               <div className="p-4 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-900/20 space-y-2 border-t border-slate-100 dark:border-slate-700">
                   <button
                      onClick={() => { onEdit(); setShowMenu(false); }}
-                     className="w-full px-3 py-2.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-2 border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all flex items-center justify-center gap-2 hover:shadow-md"
+                     className="w-full px-4 py-3 rounded-lg text-xs font-semibold bg-blue-500 dark:bg-blue-600 text-white border border-blue-600 dark:border-blue-700 hover:bg-blue-600 dark:hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-500/30 dark:hover:shadow-blue-900/50 transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95 group"
                   >
-                     <Edit2 size={14} />
-                     Edit User
+                     <Edit2 size={15} className="group-hover:scale-110 transition-transform" />
+                     <span>Edit User</span>
                   </button>
                   <button
                      onClick={() => { onDelete(); setShowMenu(false); }}
-                     className="w-full px-3 py-2.5 rounded-lg text-xs font-semibold bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-2 border-red-200 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2 hover:shadow-md"
+                     className="w-full px-4 py-3 rounded-lg text-xs font-semibold bg-red-500 dark:bg-red-600 text-white border border-red-600 dark:border-red-700 hover:bg-red-600 dark:hover:bg-red-700 hover:shadow-lg hover:shadow-red-500/30 dark:hover:shadow-red-900/50 transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95 group"
                   >
-                     <Trash2 size={14} />
-                     Delete User
+                     <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
+                     <span>Delete User</span>
                   </button>
                </div>
             </div>
@@ -939,29 +862,4 @@ function StatusIndicator({ status }) {
    );
 }
 
-function VerificationBadge({ status, isVerified }) {
-   if (isVerified) {
-      return (
-         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-400/10 border-green-200 dark:border-green-400/20">
-            <CheckCircle2 size={12} />
-            <span>Verified</span>
-         </div>
-      );
-   }
 
-   if (status === 'pending') {
-      return (
-         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-400/10 border-amber-200 dark:border-amber-400/20">
-            <Clock size={12} />
-            <span>Pending</span>
-         </div>
-      );
-   }
-
-   return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-400/10 border-slate-200 dark:border-slate-400/20">
-         <AlertTriangle size={12} />
-         <span>Unverified</span>
-      </div>
-   );
-}

@@ -111,6 +111,51 @@ export default function FactoryDashboard() {
         {/* Left Col: Main Activity & Listings */}
         <div className="lg:col-span-2 space-y-8">
            
+           {/* Recent Sales */}
+           {factoryTransactions.length > 0 && (
+           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+              <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                 <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">Recent Sales</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Latest completed transactions</p>
+                 </div>
+                 <Link to="/factory/analytics" className="text-emerald-600 dark:text-emerald-400 text-sm font-semibold hover:underline flex items-center gap-1">
+                    View Analytics <ArrowRight size={16} />
+                 </Link>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                 {factoryTransactions.slice(0, 3).map((transaction) => {
+                    const listing = listings.find(l => l.id === transaction.listingId) || {};
+                    return (
+                       <div key={transaction.id} className="p-6 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <div className="flex items-center justify-between mb-3">
+                             <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                   <BarChart3 size={20} className="text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                <div>
+                                   <p className="font-bold text-slate-900 dark:text-white">{listing.fabricType || 'Material'}</p>
+                                   <p className="text-xs text-slate-500 dark:text-slate-400">
+                                      Buyer {transaction.buyerId?.slice(0, 8)} • {new Date(transaction.date).toLocaleDateString()}
+                                   </p>
+                                </div>
+                             </div>
+                             <div className="text-right">
+                                <p className="font-bold text-emerald-600 dark:text-emerald-400">₹{Number(transaction.amount).toLocaleString()}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{listing.quantity} kg</p>
+                             </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                             <span className="text-slate-500 dark:text-slate-400">Commission: ₹{Number(transaction.commission || 0).toLocaleString()}</span>
+                             <span className="font-semibold text-slate-700 dark:text-slate-300">Net: ₹{(Number(transaction.amount) - Number(transaction.commission || 0)).toLocaleString()}</span>
+                          </div>
+                       </div>
+                    );
+                 })}
+              </div>
+           </div>
+           )}
+
            {/* Recent Listings Table */}
            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
               <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">

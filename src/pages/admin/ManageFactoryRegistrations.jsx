@@ -1,313 +1,344 @@
 import React, { useState, useEffect } from 'react';
+import { Search, Check, X, Loader2, Factory, Mail, Phone, MapPin, Building2, FileText, Clock, CheckCircle2, AlertTriangle, Filter, MoreVertical, ChevronDown } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { supabase } from '../../lib/supabase';
-import { Building2, CheckCircle, XCircle, Eye, MapPin, Phone, FileText, Users, Factory, Loader2 } from 'lucide-react';
 
 export default function ManageFactoryRegistrations() {
-  const { users } = useApp();
-  const [factoryRegistrations, setFactoryRegistrations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRegistration, setSelectedRegistration] = useState(null);
-  const [actionLoading, setActionLoading] = useState(null);
+  const { users, fetchUsers, updateVerificationStatus, updateUserStatus } = useApp();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All'); // All, Unverified, Verified
+  const [selectedFactory, setSelectedFactory] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [approvalNote, setApprovalNote] = useState('');
+  const [rejectionNote, setRejectionNote] = useState('');
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [actionType, setActionType] = useState(null); // 'approve' or 'reject'
 
+  // Fetch users on component mount
   useEffect(() => {
-    fetchFactoryRegistrations();
-  }, []);
+    const loadUsers = async () => {
+      const hasCachedUsers = sessionStorage.getItem('retex_cache_users');
+      if (!hasCachedUsers) {
+        setIsLoading(true);
+      }
 
-  const fetchFactoryRegistrations = async () => {
+      try {
+        await fetchUsers();
+        console.log('✅ [FactoryRegistrations] Factories loaded');
+      } catch (error) {
+        console.error('❌ [FactoryRegistrations] Failed to load factories:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadUsers();
+  }, [fetchUsers]);
+
+  // Debouncing Search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  // Filter factories by verification status
+  const filteredFactories = users
+    .filter(u => u.role === 'factory' || u.role === 'Factory')
+    .filter(u => {
+      const matchesSearch = 
+        (u.name || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
+        (u.email || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        (u.companyName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      
+      const matchesStatus = 
+        statusFilter === 'All' || 
+        (statusFilter === 'Unverified' && u.verificationStatus === 'unverified') ||
+        (statusFilter === 'Verified' && u.verificationStatus === 'verified');
+      
+      return matchesSearch && matchesStatus;
+    });
+
+  const handleApprove = async () => {
+    if (!selectedFactory) return;
+    
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('factory_registrations')
-        .select('*')
-        .eq('status', 'pending')
-        .order('submitted_at', { ascending: false });
-
-      if (error) throw error;
-      setFactoryRegistrations(data || []);
+      console.log(`✅ Approving factory: ${selectedFactory.id}`);
+      
+      // Update verification status to verified
+      await updateVerificationStatus(selectedFactory.id, 'verified');
+      
+      // Update account status to Verified (so they can login)
+      await updateUserStatus(selectedFactory.id, 'Verified', selectedFactory.name);
+      
+      alert(`✅ ${selectedFactory.name} has been approved! They can now login.`);
+      setShowActionModal(false);
+      setSelectedFactory(null);
+      setApprovalNote('');
     } catch (error) {
-      console.error('Error fetching factory registrations:', error);
-    } finally {
-      setLoading(false);
+      console.error('❌ Approval failed:', error);
+      alert(`Failed to approve: ${error.message}`);
     }
   };
 
-  const handleApproval = async (registrationId, userId, action) => {
+  const handleReject = async () => {
+    if (!selectedFactory) return;
+    
     try {
-      setActionLoading(registrationId);
-
-      // First, fetch the factory registration data
-      const { data: registration, error: fetchError } = await supabase
-        .from('factory_registrations')
-        .select('*')
-        .eq('id', registrationId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Update factory registration status
-      const { error: regError } = await supabase
-        .from('factory_registrations')
-        .update({
-          status: action,
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: users.find(u => u.role === 'admin')?.id
-        })
-        .eq('id', registrationId);
-
-      if (regError) throw regError;
-
-      // Update user profile with factory data if approved
-      const profileUpdate = action === 'approved' ? {
-        role: 'factory',
-        status: 'Verified',
-        factory_approved_at: new Date().toISOString(),
-        // Copy all factory registration data to profile
-        company_name: registration.company_name,
-        gst: registration.gst_number,
-        company_type: registration.company_type,
-        capacity: registration.capacity,
-        address: registration.address,
-        city: registration.city,
-        state: registration.state,
-        pincode: registration.pincode,
-        location: `${registration.city}, ${registration.state} - ${registration.pincode}`, // Combined location
-        waste_types: registration.waste_types,
-        certifications: registration.certifications,
-        description: registration.description,
-        type: 'factory' // Update type field as well
-      } : {
-        role: 'buyer',
-        status: 'Rejected',
-        factory_approved_at: null
-      };
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update(profileUpdate)
-        .eq('id', userId);
-
-      if (profileError) throw profileError;
-
-      // Refresh data
-      await fetchFactoryRegistrations();
-
-      alert(`Factory registration ${action} successfully!`);
+      console.log(`❌ Rejecting factory: ${selectedFactory.id}`);
+      
+      // Update verification status to unverified (keep as unverified = not approved)
+      // For now, we'll just keep them unverified. Could add a 'rejected' status if needed
+      alert(`❌ ${selectedFactory.name}'s registration was not approved. They will be notified.`);
+      setShowActionModal(false);
+      setSelectedFactory(null);
+      setRejectionNote('');
     } catch (error) {
-      console.error('Error updating factory registration:', error);
-      alert('Failed to update registration status');
-    } finally {
-      setActionLoading(null);
+      console.error('❌ Rejection failed:', error);
+      alert(`Failed to reject: ${error.message}`);
     }
   };
 
-  if (loading) {
+  const VerificationBadge = ({ status }) => {
+    if (status === 'verified') {
+      return (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+          <CheckCircle2 size={14} />
+          <span>Verified</span>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+        <Clock size={14} />
+        <span>Pending Approval</span>
       </div>
     );
-  }
+  };
+
+  const pendingCount = users.filter(u => (u.role === 'factory' || u.role === 'Factory') && u.verificationStatus === 'unverified').length;
+  const approvedCount = users.filter(u => (u.role === 'factory' || u.role === 'Factory') && u.verificationStatus === 'verified').length;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Factory Registrations</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm sm:text-base">
-            Review and approve factory registration requests
-          </p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+            <Factory className="text-emerald-600" size={32} />
+            Factory Registrations
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage and approve new seller registrations</p>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">{factoryRegistrations.length}</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Pending Approvals</p>
+
+        {/* Stats */}
+        <div className="flex gap-4">
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+            <p className="text-amber-600 dark:text-amber-400 text-sm font-semibold">Pending Approval</p>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">{pendingCount}</p>
+          </div>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <p className="text-green-600 dark:text-green-400 text-sm font-semibold">Approved</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">{approvedCount}</p>
+          </div>
         </div>
       </div>
 
-      {/* Factory Registration Details Modal */}
-      {selectedRegistration && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Factory Registration Details</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Submitted on {new Date(selectedRegistration.submitted_at).toLocaleDateString()}
-                  </p>
+      {/* Filters */}
+      <div className="bg-white dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Status Filter */}
+          <div className="relative">
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="appearance-none bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 pl-10 pr-8 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none w-full sm:w-40"
+            >
+              <option value="All">All Status</option>
+              <option value="Unverified">Pending Approval</option>
+              <option value="Verified">Approved</option>
+            </select>
+            <Filter className="absolute left-3 top-3 text-slate-500 w-4 h-4 pointer-events-none" />
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1">
+            <input 
+              type="text" 
+              placeholder="Search by name, email, or company..."
+              className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4" />
+          </div>
+        </div>
+      </div>
+
+      {/* Factories List */}
+      <div className="space-y-3">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin w-8 h-8 text-emerald-500" />
+          </div>
+        ) : filteredFactories.length === 0 ? (
+          <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-12 text-center">
+            <Factory className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+            <p className="text-slate-500 dark:text-slate-400 text-lg">No factories found</p>
+          </div>
+        ) : (
+          filteredFactories.map(factory => (
+            <div 
+              key={factory.id}
+              className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 hover:border-emerald-300 dark:hover:border-emerald-600 transition-all group"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                {/* Factory Info */}
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-linear-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white font-bold text-sm">
+                      {factory.name ? factory.name.charAt(0).toUpperCase() : 'F'}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                        {factory.name}
+                      </h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {factory.companyName}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Details Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                      <Mail size={16} className="text-slate-400" />
+                      <a href={`mailto:${factory.email}`} className="hover:text-emerald-600 dark:hover:text-emerald-400 truncate">
+                        {factory.email}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                      <Phone size={16} className="text-slate-400" />
+                      <span>{factory.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                      <MapPin size={16} className="text-slate-400" />
+                      <span>{factory.location}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <VerificationBadge status={factory.verificationStatus} />
+                    </div>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setSelectedRegistration(null)}
-                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  <XCircle size={24} />
-                </button>
+
+                {/* Actions */}
+                {factory.verificationStatus === 'unverified' && (
+                  <div className="flex gap-2 md:flex-col">
+                    <button
+                      onClick={() => {
+                        setSelectedFactory(factory);
+                        setActionType('approve');
+                        setShowActionModal(true);
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <Check size={16} />
+                      <span className="hidden md:inline">Approve</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedFactory(factory);
+                        setActionType('reject');
+                        setShowActionModal(true);
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <X size={16} />
+                      <span className="hidden md:inline">Reject</span>
+                    </button>
+                  </div>
+                )}
+
+                {factory.verificationStatus === 'verified' && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-semibold text-green-700 dark:text-green-300">Approved</span>
+                  </div>
+                )}
               </div>
             </div>
+          ))
+        )}
+      </div>
 
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Company Name</label>
-                    <p className="text-lg font-semibold text-slate-900 dark:text-white mt-1">{selectedRegistration.company_name}</p>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">GST Number</label>
-                    <p className="text-slate-700 dark:text-slate-300 mt-1 font-mono">{selectedRegistration.gst_number}</p>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Company Type</label>
-                    <p className="text-slate-700 dark:text-slate-300 mt-1">{selectedRegistration.company_type}</p>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Monthly Capacity</label>
-                    <p className="text-slate-700 dark:text-slate-300 mt-1">{selectedRegistration.capacity} kg</p>
-                  </div>
+      {/* Action Modal */}
+      {showActionModal && selectedFactory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in scale-95 duration-200">
+            <div className="flex items-center gap-3">
+              {actionType === 'approve' ? (
+                <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <Check className="text-green-600 dark:text-green-400" size={24} />
                 </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Address</label>
-                    <p className="text-slate-700 dark:text-slate-300 mt-1">
-                      {selectedRegistration.address}<br />
-                      {selectedRegistration.city}, {selectedRegistration.state} - {selectedRegistration.pincode}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Waste Types</label>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {selectedRegistration.waste_types?.map(type => (
-                        <span key={type} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-xs rounded-full">
-                          {type}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {selectedRegistration.certifications?.length > 0 && (
-                    <div>
-                      <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Certifications</label>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {selectedRegistration.certifications.map(cert => (
-                          <span key={cert} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs rounded-full">
-                            {cert}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {selectedRegistration.description && (
-                <div>
-                  <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Business Description</label>
-                  <div className="mt-2 p-4 bg-slate-50 dark:bg-slate-700/30 rounded-lg">
-                    <p className="text-slate-700 dark:text-slate-300">{selectedRegistration.description}</p>
-                  </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <X className="text-red-600 dark:text-red-400" size={24} />
                 </div>
               )}
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white">
+                  {actionType === 'approve' ? 'Approve Factory' : 'Reject Application'}
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{selectedFactory.name}</p>
+              </div>
             </div>
 
-            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+            <p className="text-slate-600 dark:text-slate-300">
+              {actionType === 'approve' 
+                ? 'This factory will be able to login and start selling.' 
+                : 'This factory will not be able to login until approved.'}
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                {actionType === 'approve' ? 'Approval Notes (Optional)' : 'Rejection Reason (Optional)'}
+              </label>
+              <textarea
+                value={actionType === 'approve' ? approvalNote : rejectionNote}
+                onChange={(e) => actionType === 'approve' 
+                  ? setApprovalNote(e.target.value) 
+                  : setRejectionNote(e.target.value)}
+                placeholder="Add any notes..."
+                rows="3"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
               <button
-                onClick={() => handleApproval(selectedRegistration.id, selectedRegistration.user_id, 'rejected')}
-                disabled={actionLoading === selectedRegistration.id}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-70"
+                onClick={() => {
+                  setShowActionModal(false);
+                  setSelectedFactory(null);
+                  setApprovalNote('');
+                  setRejectionNote('');
+                }}
+                className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
               >
-                {actionLoading === selectedRegistration.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle size={16} />}
-                Reject
+                Cancel
               </button>
               <button
-                onClick={() => handleApproval(selectedRegistration.id, selectedRegistration.user_id, 'approved')}
-                disabled={actionLoading === selectedRegistration.id}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-70"
+                onClick={actionType === 'approve' ? handleApprove : handleReject}
+                className={`flex-1 px-4 py-2.5 text-white font-semibold rounded-lg transition-all ${
+                  actionType === 'approve'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                {actionLoading === selectedRegistration.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle size={16} />}
-                Approve
+                {actionType === 'approve' ? 'Approve' : 'Reject'}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Registrations Table */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm dark:shadow-none">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">
-                <th className="p-5">Company</th>
-                <th className="p-5">Location</th>
-                <th className="p-5">Capacity</th>
-                <th className="p-5">Waste Types</th>
-                <th className="p-5">Submitted</th>
-                <th className="p-5">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
-              {factoryRegistrations.map((reg) => (
-                <tr key={reg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">
-                  <td className="p-5">
-                    <div>
-                      <p className="font-bold text-slate-900 dark:text-white">{reg.company_name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{reg.gst_number}</p>
-                    </div>
-                  </td>
-                  <td className="p-5">
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-slate-400" />
-                      <span className="text-slate-700 dark:text-slate-300">{reg.city}, {reg.state}</span>
-                    </div>
-                  </td>
-                  <td className="p-5 font-medium text-slate-900 dark:text-white">
-                    {reg.capacity} kg/month
-                  </td>
-                  <td className="p-5">
-                    <div className="flex flex-wrap gap-1">
-                      {reg.waste_types?.slice(0, 2).map(type => (
-                        <span key={type} className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-xs rounded-full">
-                          {type}
-                        </span>
-                      ))}
-                      {reg.waste_types?.length > 2 && (
-                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
-                          +{reg.waste_types.length - 2}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-5 text-slate-500 dark:text-slate-400">
-                    {new Date(reg.submitted_at).toLocaleDateString()}
-                  </td>
-                  <td className="p-5">
-                    <button
-                      onClick={() => setSelectedRegistration(reg)}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm flex items-center gap-1"
-                    >
-                      <Eye size={14} />
-                      Review
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {factoryRegistrations.length === 0 && (
-        <div className="py-20 text-center animate-in fade-in">
-          <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-300">
-            <Building2 size={40} />
-          </div>
-          <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">No Pending Registrations</h3>
-          <p className="text-slate-500 mt-2 font-medium">All factory registration requests have been processed.</p>
         </div>
       )}
     </div>

@@ -136,7 +136,7 @@ export default function Login() {
         const { user } = data;
         
         // Fetch user profile
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
@@ -144,6 +144,15 @@ export default function Login() {
 
         // Priority: Profile (DB) > User Metadata (Auth) > Default
         const userRole = profile?.role || user.user_metadata?.role || 'buyer';
+        const verificationStatus = profile?.verification_status || 'verified';
+        
+        // Check if factory user is unverified (pending admin approval)
+        if (userRole === 'factory' && verificationStatus === 'unverified') {
+            setError('Your seller account is pending admin approval. You will receive an email once approved.');
+            setLoading(false);
+            await supabase.auth.signOut();
+            return;
+        }
         
         // ✨ Enhanced user object with ALL profile fields including avatar
         let avatarUrl = profile?.avatar_url || '';

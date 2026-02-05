@@ -16,13 +16,15 @@
 - [Tech Stack](#-tech-stack)
 - [Quick Start](#-quick-start)
 - [Database Setup](#-database-setup)
-- [Premium Packages](#-premium-packages-new)
+- [Factory Approval System](#-factory-approval-system)
+- [Email Configuration](#-email-configuration)
+- [Form Validation](#-form-validation)
 - [Project Structure](#-project-structure)
 - [User Roles](#-user-roles)
 - [Environment Variables](#-environment-variables)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
-- [License](#-license)
+- [Architecture Updates](#-architecture-updates)
 
 ---
 
@@ -139,32 +141,22 @@ npm run preview
 1. Go to [supabase.com](https://supabase.com) and create a project
 2. Note your project URL and API keys
 
-### Step 2: Run Migration Scripts
+### Step 2: Run Migration Script
 
-Execute these SQL files in order via **Supabase Dashboard → SQL Editor**:
+**Execute the consolidated database.sql file:**
 
-#### A. Core Tables (if using existing schema)
+1. Open Supabase Dashboard → SQL Editor
+2. Copy the entire content of `database.sql`
+3. Paste and run the script
+4. Verify success messages in the output
 
-```sql
--- Run initial schema migrations
--- Your existing tables: profiles, listings, transactions, etc.
--- If transactions table doesn't exist, run:
--- Execute: create_transactions_table.sql
-```
-
-#### B. Premium Packages (NEW Feature)
-
-```sql
--- 1. Create packages table with sample data
--- Execute: packages_schema.sql
-```
-
-```sql
--- 2. Set up Row Level Security policies
--- Execute: packages_rls_policies.sql
-```
-
-**Important**: The RLS policies are **required** for the public packages page to work.
+**What this script does:**
+- ✅ Sets up factory approval system with verification_status
+- ✅ Creates RLS policies for security
+- ✅ Sets up packages, transactions, bulk_requests tables
+- ✅ Configures storage buckets
+- ✅ Creates triggers for auto-verification
+- ✅ Grants necessary permissions
 
 ### Step 3: Verify Setup
 
@@ -173,92 +165,157 @@ Execute these SQL files in order via **Supabase Dashboard → SQL Editor**:
 SELECT table_name FROM information_schema.tables
 WHERE table_schema = 'public';
 
--- Check packages data
-SELECT name, price, status FROM packages;
-
--- Verify RLS policies
-SELECT * FROM pg_policies WHERE tablename = 'packages';
+-- Verify factory verification system
+SELECT role, verification_status, COUNT(*) 
+FROM profiles 
+GROUP BY role, verification_status;
 ```
 
 ---
 
-## 📦 Premium Packages (NEW!)
+## 🏭 Factory Approval System
 
 ### Overview
 
-The Premium Packages feature allows admins to create subscription tiers that are displayed publicly on the `/packages` route.
+The platform includes a complete factory seller approval workflow:
+
+- **Registration**: When users register as sellers, they are marked as `unverified`
+- **Login Blocking**: Unverified factories cannot login until approved
+- **Admin Approval**: Admins review and approve factory registrations at `/admin/factory-registrations`
+- **Email Notification**: Factories receive approval confirmation
+
+### Workflow
+
+1. **User Registration** (`/register`)
+   - User checks "I want to register as a Seller"
+   - Role set to `factory`, verification_status set to `unverified`
+   - Confirmation screen shows "pending approval" message
+
+2. **Login Attempt** (`/login`)
+   - Unverified factories see: "Your seller account is pending admin approval"
+   - Automatically signed out
+   - Must wait for admin approval
+
+3. **Admin Review** (`/admin/factory-registrations`)
+   - View all pending factory registrations
+   - Filter by unverified/verified status
+   - Search by name, email, company
+   - Click "Approve" to verify a factory
+   - Optional: Add approval notes
+
+4. **Post-Approval**
+   - verification_status changed to `verified`
+   - Factory can now login normally
+   - Full access to factory dashboard
+
+### Technical Implementation
+
+**Database Fields:**
+- `verification_status`: 'unverified' | 'verified' (only 2 states)
+- `is_verified`: boolean flag
+- `verified_at`: timestamp of approval
+
+**RLS Policies:**
+- Users can only view/update their own profiles
+- Admin authorization handled at application level (not in RLS to avoid recursion)
+
+---
+
+## 📧 Email Configuration
+
+### Supabase Email Setup
+
+By default, Supabase sends confirmation emails. To ensure they work properly:
+
+#### Step 1: Enable Email Confirmations
+
+1. Go to Supabase Dashboard → **Authentication** → **Settings**
+2. Enable **"Enable email confirmations"**
+
+#### Step 2: Configure Email Templates
+
+1. Navigate to **Authentication** → **Email Templates**
+2. Customize **"Confirm signup"** template:
+
+```html
+<h2>Welcome to ReTexValue!</h2>
+<p>Click below to confirm your account:</p>
+<p><a href="{{ .ConfirmationURL }}">Confirm Email</a></p>
+<p>Join the circular economy revolution! 🌿</p>
+```
+
+#### Step 3: Production SMTP (Recommended)
+
+For production, use custom SMTP to avoid rate limits:
+
+1. Go to **Project Settings** → **Auth** → **SMTP Settings**
+2. Enable **Custom SMTP**
+3. Configure your provider (Gmail, SendGrid, AWS SES):
+
+**Gmail Example:**
+```
+Host: smtp.gmail.com
+Port: 587
+Username: your-email@gmail.com
+Password: [app-password]
+Sender: your-email@gmail.com
+```
+
+**Note**: For Gmail, create an App Password in Google Account settings.
+
+#### Step 4: Configure URLs
+
+1. Go to **Authentication** → **URL Configuration**
+2. Set **Site URL**: Your deployment URL
+3. Add **Redirect URLs**:
+   - `https://yourdomain.com/login`
+   - `http://localhost:5173/**` (for development)
+
+### Troubleshooting Email Issues
+
+**Problem**: Emails not arriving
+
+**Solutions**:
+- Check spam/junk folder
+- Verify Supabase email rate limits (free tier is limited)
+- Check **Logs** → **Auth Logs** in Supabase
+- Confirm email provider is enabled in Auth settings
+
+**Development Only**: To skip email verification during development:
+- Disable "Enable email confirmations" in Auth settings
+- ⚠️ Only use in development!
+
+---
+
+## ✅ Form Validation
+
+All major forms include comprehensive client-side validation:
+
+### Contact Form (`/contact`)
+- **Name**: Min 2 chars, letters only
+- **Email**: Valid email format
+- **Message**: 10-1000 chars with counter
+- Real-time error display
+
+### Bulk Request Form (`/buyer/bulk-request`)
+- **Quantity**: 0-10,000,000 kg
+- **Target Price**: Optional, max ₹100,000/kg
+- **Deadline**: Must be future date
+- **Description**: 10-500 chars with counter
+- Instant validation on change
+
+### Submit Proposal Form (`/factory/submit-proposal`)
+- **Price**: Required, max ₹10,000/kg
+- **Delivery Date**: Cannot be past, must be before deadline
+- **Message**: 5-500 chars with counter
+- Date validation with buyer deadline checks
 
 ### Features
-
-✅ **Admin Management** (`/admin/packages`)
-
-- Create, edit, delete packages
-- Set pricing, duration, and features
-- Toggle featured status
-- Manage package limits (listings, AI credits, bulk requests)
-
-✅ **Public Display** (`/packages`)
-
-- Beautiful pricing cards
-- Featured package highlighting
-- Responsive design
-- Dark mode support
-
-### Package Creation
-
-**Admin Panel:**
-
-```
-1. Login as admin
-2. Navigate to /admin/packages
-3. Click "Add Package"
-4. Fill form:
-   - Name, Price, Duration
-   - Max Listings, AI Credits
-   - Features list
-   - Badge color, Featured toggle
-5. Click "Create Package"
-```
-
-**Sample Package Structure:**
-
-```javascript
-{
-  name: "Professional",
-  price: 999,
-  durationDays: 30,
-  maxListings: 50,
-  aiCredits: 100,
-  prioritySupport: true,
-  isFeatured: true,
-  features: [
-    "50 Listings per month",
-    "Advanced AI Classification",
-    "Priority Support"
-  ]
-}
-```
-
-### Security (RLS Policies)
-
-The packages feature uses Row Level Security:
-
-- ✅ **Public users** can view active packages
-- ✅ **Authenticated users** can view all packages
-- ✅ **Only admins** can create/edit/delete packages
-
-**If packages don't show on `/packages`:**
-
-```sql
--- Run this in Supabase SQL Editor
-ALTER TABLE packages ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can view active packages"
-ON packages FOR SELECT
-USING (status = 'active');
-
--- See packages_rls_policies.sql for complete policies
-```
+- ✅ Real-time error clearing on input
+- ✅ Visual feedback (red borders)
+- ✅ Character counters
+- ✅ Form submission blocking if invalid
+- ✅ Comprehensive error messages
 
 ---
 
@@ -399,7 +456,140 @@ Razorpay modal for secure transactions with order tracking.
 
 ---
 
+## � Architecture Updates
+
+### Database-Direct Architecture
+
+The platform has transitioned from localStorage caching to real-time database architecture:
+
+**Key Changes:**
+- ✅ Removed all localStorage caching (14 instances)
+- ✅ Fixed infinite loop bug with `realtimeInitialized` flag
+- ✅ Implemented Supabase real-time subscriptions for:
+  - `profiles` table
+  - `listings` table
+  - `bulk_requests` table
+  - `transactions` table
+- ✅ Added optimistic UI updates with error rollback
+
+### Data Fetching Pattern
+
+Every page follows this pattern:
+
+```javascript
+import React, { useState, useEffect } from 'react';
+import { useApp } from '../../context/AppContext';
+
+export default function PageName() {
+  const { data, fetchData } = useApp();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await fetchData();
+      } catch (error) {
+        console.error('Failed to load:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchData]);
+
+  if (loading) {
+    return <div className="animate-spin">Loading...</div>;
+  }
+
+  // Rest of component...
+}
+```
+
+### Pages Updated (26 Total)
+
+- **Admin Pages (10)**: Dashboard, Analytics, BulkRequests, ManageListings, Transactions, Reports, Settings, PendingApprovals, ManageUsers, ManageFactoryRegistrations
+- **Factory Pages (7)**: Dashboard, Analytics, BulkRequests, Inventory, Proposals, SubmitProposal, Upload
+- **Buyer Pages (6)**: Dashboard, Analytics, Marketplace, Orders, BulkRequest, Proposals
+- **Profile/Settings pages**: Use user context only
+
+---
+
 ## 🐛 Troubleshooting
+
+### Payment Transaction Recording Error
+
+**Symptom**: "Payment successful but failed to record transaction"
+
+**What it means**:
+- ✅ Payment was charged successfully  
+- ❌ Transaction record failed to save in database
+- ⚠️ User is charged but no order exists
+
+**Root Causes:**
+
+1. **RLS Policy Issue** (Most Common)
+   - The `transactions` table RLS is too restrictive
+   - Check browser console for error code `42501` (permission denied)
+
+2. **User Authentication Mismatch**
+   - `auth.uid()` doesn't match profile `id`
+
+3. **Foreign Key Constraint**
+   - Invalid `listing_id` or `buyer_id` reference
+
+**Fix:**
+
+Run `database.sql` which includes correct RLS policies:
+
+```sql
+-- Buyers can insert their own transactions
+CREATE POLICY "Buyers can insert own transactions"
+ON public.transactions FOR INSERT
+WITH CHECK (auth.uid() = buyer_id);
+```
+
+**Verify User Profile:**
+
+```sql
+SELECT id, email, role FROM public.profiles 
+WHERE id = auth.uid();
+```
+
+If no result, create the profile:
+
+```sql
+INSERT INTO public.profiles (id, email, role)
+VALUES (auth.uid(), 'user@email.com', 'buyer')
+ON CONFLICT DO NOTHING;
+```
+
+### Factory Approval Issues
+
+**Symptom**: Factory can login despite being unverified
+
+**Fix**: 
+- Ensure `database.sql` has been run
+- Check `verification_status` field exists in profiles table
+- Verify trigger function `set_new_user_verification()` is active
+
+**Symptom**: Admin can't see pending factories
+
+**Fix**:
+- Navigate to `/admin/factory-registrations` (NOT `/admin/users`)
+- Check AppContext has `fetchUsers()` exported
+- Verify RLS policies allow admins to read all profiles
+
+### Infinite Recursion in RLS Policies
+
+**Symptom**: "infinite recursion detected in policy for relation 'profiles'"
+
+**Cause**: RLS policies querying the same table they protect
+
+**Fix**: 
+- Run the updated `database.sql` which removes recursive policies
+- Admin authorization is now handled at application level
+- Never use SELECT inside WITH CHECK clauses
 
 ### Issue: Packages Don't Show on Public Page
 

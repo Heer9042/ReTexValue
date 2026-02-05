@@ -8,31 +8,39 @@ export default function BuyerProposals() {
   const [showNegotiate, setShowNegotiate] = useState(null);
   const [negotiationMsg, setNegotiationMsg] = useState('');
   const [activeTab, setActiveTab] = useState('received');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [cachedData, setCachedData] = useState(() => {
+    try {
+      const cached = localStorage.getItem('buyer_proposals_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const loadData = async () => {
-      // Check if we have cached data - if yes, don't show loader
-      const hasData = proposals && proposals.length > 0;
-      
-      if (!hasData) {
-        setLoading(true);
+      // If we have cached data, don't show loader
+      if (cachedData) {
+        setLoading(false);
       }
       
       try {
         await Promise.all([fetchProposals(), fetchBulkRequests()]);
+        // Cache the data
+        localStorage.setItem('buyer_proposals_cache', JSON.stringify({ timestamp: Date.now() }));
       } catch (error) {
         console.error('Failed to load proposals:', error);
       } finally {
-        // Always hide loader after fetch attempt, whether successful or not
         setLoading(false);
       }
     };
     loadData();
-  }, [fetchProposals, fetchBulkRequests]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Show loader only if we're fetching AND we have no data
-  if (loading && (!proposals || proposals.length === 0)) {
+  // Show loader while fetching data
+  if (loading) {
     return (
       <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
         <div className="text-center">

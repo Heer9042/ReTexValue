@@ -112,42 +112,62 @@ export default function Marketplace() {
               handler: async function(response) {
                 try {
                   console.log("✅ Payment successful:", response);
+                  console.log("🔐 User info - ID:", user?.id, "Email:", user?.email);
                   
-                  // Record transaction in database
-                  const { error: txError, data: txData } = await supabase.from('transactions').insert([{
-                    listing_id: listing.id,
-                    buyer_id: user.id,
-                    amount: totalPrice,
-                    commission: Math.round(totalPrice * (settings?.platformFee || 5) / 100),
-                    payment_id: response.razorpay_payment_id,
-                    status: 'Completed'
-                  }]).select();
-
-                  if (txError) {
-                    console.error("❌ Transaction recording error:", txError);
-                    alert("⚠️ Payment successful but failed to record transaction. Please contact support with ID: " + response.razorpay_payment_id);
+                  // Validate user authentication
+                  if (!user?.id || !user?.email) {
+                    console.error("❌ User not properly authenticated");
+                    alert("⚠️ Payment successful but user session invalid. Please log in again and contact support with ID: " + response.razorpay_payment_id);
                     setPurchasingId(null);
                     return;
                   }
 
-                  console.log("✅ Transaction recorded:", txData);
+                  // Calculate commission as decimal
+                  const platformFee = settings?.platformFee || 5;
+                  const commission = parseFloat((totalPrice * platformFee / 100).toFixed(2));
+                  
+                  console.log("💳 Transaction details:", {
+                    listing_id: listing.id,
+                    buyer_id: user.id,
+                    amount: totalPrice,
+                    commission: commission,
+                    payment_id: response.razorpay_payment_id
+                  });
 
-                  // Mark listing as sold
-                  const { error: listingError } = await supabase
-                    .from('listings')
-                    .update({ 
-                      status: 'Sold',
-                      quantity: 0,
-                      updated_at: new Date().toISOString()
-                    })
-                    .eq('id', listing.id);
+                  const withTimeout = (promise, ms, label) => Promise.race([
+                    promise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
+                  ]);
 
-                  if (listingError) {
-                    console.error("⚠️ Failed to mark listing as sold:", listingError);
-                    // Still proceed since payment and transaction are recorded
-                  } else {
-                    console.log("✅ Listing marked as Sold");
+                  console.log("📡 Processing payment in backend...");
+                  const { data: rpcData, error: rpcError } = await withTimeout(
+                    supabase.rpc('process_payment', {
+                      p_listing_id: listing.id,
+                      p_payment_id: response.razorpay_payment_id,
+                      p_amount: parseFloat(totalPrice.toFixed(2)),
+                      p_commission: commission
+                    }),
+                    20000,
+                    "Payment processing"
+                  );
+
+                  if (rpcError) {
+                    console.error("❌ Backend payment error:", rpcError);
+                    let errorMsg = "Payment successful but order processing failed.";
+                    if (rpcError.message?.includes('Duplicate payment id')) {
+                      errorMsg = "Payment already processed. Please refresh your orders.";
+                    } else if (rpcError.message?.includes('Listing not found or not Live')) {
+                      errorMsg = "Listing already sold or unavailable.";
+                    } else if (rpcError.message?.includes('Not authenticated')) {
+                      errorMsg = "Session expired. Please log in again.";
+                    }
+
+                    alert(`⚠️ ${errorMsg}\n\nPayment ID: ${response.razorpay_payment_id}`);
+                    setPurchasingId(null);
+                    return;
                   }
+
+                  console.log("✅ Payment processed in backend", rpcData);
 
                   // Update context cache by refetching listings
                   await fetchListings();
@@ -156,13 +176,14 @@ export default function Marketplace() {
                   setPurchasingId(null);
 
                   // Show success message
-                  alert(`✅ Purchase Successful!\n\nPayment ID: ${response.razorpay_payment_id}\nAmount: ₹${totalPrice.toLocaleString()}\nQuantity: ${listing.quantity}kg\n\nOrder details sent to your email.`);
+                  alert(`✅ Purchase Successful!\n\nPayment ID: ${response.razorpay_payment_id}\nAmount: ₹${totalPrice.toLocaleString()}\nQuantity: ${listing.quantity}kg`);
                   
                   // Redirect to orders page
                   navigate('/buyer/orders');
                 } catch (err) {
                   console.error("❌ Payment handler error:", err);
-                  alert("❌ Payment successful but order processing failed.\nPayment ID: " + response.razorpay_payment_id + "\nPlease contact support.");
+                  console.error("Error stack:", err.stack);
+                  alert("❌ Payment successful but order processing failed.\nPayment ID: " + response.razorpay_payment_id + "\n\nPlease contact support.");
                   setPurchasingId(null);
                 }
               },

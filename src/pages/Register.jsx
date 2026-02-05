@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { User, Mail, Lock, Loader2, ArrowRight, Factory } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Navbar from '../components/Navbar';
 
@@ -110,10 +110,8 @@ export default function Register() {
         const phoneDigits = value.replace(/\D/g, '');
         if (!value) {
           error = 'Phone number is required';
-        } else if (phoneDigits.length < 10) {
-          error = 'Phone number must be at least 10 digits';
-        } else if (phoneDigits.length > 15) {
-          error = 'Phone number is too long';
+        } else if (phoneDigits.length !== 10) {
+          error = 'Phone number must be exactly 10 digits';
         }
         break;
       }
@@ -132,7 +130,12 @@ export default function Register() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
+    let newValue = type === 'checkbox' ? checked : value;
+    
+    // For phone field, only allow digits and limit to 10 digits
+    if (name === 'phone') {
+      newValue = value.replace(/\D/g, '').slice(0, 10);
+    }
     
     setFormData(prev => ({
       ...prev,
@@ -239,10 +242,8 @@ export default function Register() {
     const phoneDigits = phone.replace(/\D/g, '');
     if (!phone) {
       errors.phone = 'Phone number is required';
-    } else if (phoneDigits.length < 10) {
-      errors.phone = 'Phone number must be at least 10 digits';
-    } else if (phoneDigits.length > 15) {
-      errors.phone = 'Phone number is too long';
+    } else if (phoneDigits.length !== 10) {
+      errors.phone = 'Phone number must be exactly 10 digits';
     }
     
     // Location validation
@@ -303,32 +304,35 @@ export default function Register() {
             // Create profile immediately
             if (data.session) {
                 console.log("Auto-login enabled - creating profile");
+                
+                // Determine role and verification status based on seller registration
+                const userRole = formData.wantsToBeFactory ? 'factory' : formData.role;
+                const verificationStatus = formData.wantsToBeFactory ? 'unverified' : 'verified';
+                const accountStatus = formData.wantsToBeFactory ? 'Pending' : 'Active';
+                
                 const { error: profileError } = await supabase
                     .from('profiles')
                     .upsert({
                         id: data.user.id,
                         email: email,
                         full_name: fullName,
-                      company_name: companyName,
+                        company_name: companyName,
                         username: username,
-                        role: formData.wantsToBeFactory ? 'factory_pending' : formData.role,
+                        role: userRole,
                         phone: phone,
                         location: location,
-                        status: formData.wantsToBeFactory ? 'Factory Pending' : 'Pending',
-                        wants_to_be_factory: formData.wantsToBeFactory
+                        status: accountStatus,
+                        verification_status: verificationStatus,
+                        is_verified: !formData.wantsToBeFactory
                     });
                 
                 if (profileError) console.warn("Profile creation warning:", profileError.message);
                 
-                // If user wants to be a factory, redirect to factory details page
+                // If user wants to be a factory (seller), show pending approval message
                 if (formData.wantsToBeFactory) {
-                    navigate('/register/factory-details', { 
-                        state: { 
-                            userId: data.user.id,
-                            email: email,
-                            fullName: fullName
-                        }
-                    });
+                    setVerificationSent(true);
+                    // Store message type for showing correct verification screen
+                    sessionStorage.setItem('pendingApprovalType', 'factory');
                 } else {
                     // Auto-login successful, redirect to login or dashboard
                     navigate('/login');
@@ -378,18 +382,37 @@ export default function Register() {
   };
 
   if (verificationSent) {
+      const isFactoryPending = sessionStorage.getItem('pendingApprovalType') === 'factory';
+      
       return (
         <>
             <Navbar />
             <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center p-4">
                 <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 shadow-xl text-center animate-in fade-in zoom-in duration-300">
-                    <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Mail className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+                    <div className={`w-16 h-16 ${isFactoryPending ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30'} rounded-full flex items-center justify-center mx-auto mb-6`}>
+                        {isFactoryPending ? (
+                            <Factory className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+                        ) : (
+                            <Mail className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+                        )}
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Check Your Email</h2>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        {isFactoryPending ? 'Pending Admin Approval' : 'Check Your Email'}
+                    </h2>
                     <p className="text-slate-600 dark:text-slate-400 mb-6">
-                        We've sent a verification link to <span className="font-semibold text-slate-900 dark:text-white">{formData.email}</span>. 
-                        Please click the link to verify your account.
+                        {isFactoryPending ? (
+                            <>
+                                Your seller registration request has been submitted successfully! 
+                                Our admin team will review your application and notify you at{' '}
+                                <span className="font-semibold text-slate-900 dark:text-white">{formData.email}</span>{' '}
+                                once approved. You'll be able to login once your account is verified.
+                            </>
+                        ) : (
+                            <>
+                                We've sent a verification link to <span className="font-semibold text-slate-900 dark:text-white">{formData.email}</span>. 
+                                Please click the link to verify your account.
+                            </>
+                        )}
                     </p>
                     
                     {resendSuccess && (
@@ -413,7 +436,7 @@ export default function Register() {
                         Didn't receive the email?
                         <button
                           onClick={handleResendEmail}
-                          disabled={resendLoading}
+                          disabled={resendLoading || isFactoryPending}
                           className="ml-2 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-semibold disabled:opacity-50"
                         >
                           {resendLoading ? 'Sending...' : 'Resend Email'}
@@ -421,8 +444,18 @@ export default function Register() {
                       </div>
                     </div>
                     
-                    <Link to="/login" className="block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition-colors">
-                        Proceed to Login
+                    {!isFactoryPending && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 mb-6">
+                            Tip: Check your spam folder if you don't see it in a few minutes.
+                        </p>
+                    )}
+                    
+                    <Link 
+                        to="/login" 
+                        className="block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition-colors"
+                        onClick={() => sessionStorage.removeItem('pendingApprovalType')}
+                    >
+                        {isFactoryPending ? 'Back to Login' : 'Proceed to Login'}
                     </Link>
                 </div>
             </div>
@@ -632,7 +665,9 @@ export default function Register() {
                         value={formData.phone || ''}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        placeholder="9876543210"
+                        placeholder="Enter 10 digit number"
+                        inputMode="numeric"
+                        maxLength="10"
                         className={`w-full px-4 py-3 rounded-xl border ${
                           fieldErrors.phone 
                             ? 'border-red-500 focus:ring-red-500' 

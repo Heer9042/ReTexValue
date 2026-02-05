@@ -5,31 +5,39 @@ import { Search, Filter, ShoppingBag, Clock, CheckCircle, ArrowUpRight, Receipt,
 export default function BuyerOrders() {
   const { transactions, listings, user, fetchTransactions, fetchListings } = useApp();
   const [filter, setFilter] = useState('All');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [cachedData, setCachedData] = useState(() => {
+    try {
+      const cached = localStorage.getItem('buyer_orders_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const loadData = async () => {
-      // Check if we have cached data - if yes, don't show loader
-      const hasData = transactions && transactions.length > 0;
-      
-      if (!hasData) {
-        setLoading(true);
+      // If we have cached data, don't show loader
+      if (cachedData) {
+        setLoading(false);
       }
       
       try {
         await Promise.all([fetchTransactions(), fetchListings()]);
+        // Cache the data
+        localStorage.setItem('buyer_orders_cache', JSON.stringify({ timestamp: Date.now() }));
       } catch (error) {
         console.error('Failed to load orders:', error);
       } finally {
-        // Always hide loader after fetch attempt, whether successful or not
         setLoading(false);
       }
     };
     loadData();
-  }, [fetchTransactions, fetchListings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Show loader only if we're fetching AND we have no data
-  if (loading && (!transactions || transactions.length === 0)) {
+  // Show loader while fetching data
+  if (loading) {
     return (
       <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
         <div className="text-center">

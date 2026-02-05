@@ -1,18 +1,40 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { BarChart, BadgeDollarSign, TrendingUp, Calendar, ArrowUpRight, Zap, Globe, ShieldCheck, Activity } from 'lucide-react';
+import { 
+  TrendingUp, PieChart, BadgeDollarSign, Leaf, AlertCircle, Package, 
+  ArrowUpRight, ArrowDownRight, ShoppingBag, Target
+} from 'lucide-react';
+import {
+  AreaChart, Area, PieChart as RePieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
+
+const COLORS = ['#10b981', '#3b82f6', '#a855f7', '#f59e0b', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
 
 export default function Analytics() {
    const { transactions, user, listings, fetchTransactions, fetchListings } = useApp();
-   const [loading, setLoading] = useState(false);
+   const [loading, setLoading] = useState(true);
+   const [timeFrame, setTimeFrame] = useState('6m');
+   const [cachedData] = useState(() => {
+     try {
+       const cached = localStorage.getItem('factory_analytics_cache');
+       return cached ? JSON.parse(cached) : null;
+     } catch {
+       return null;
+     }
+   });
 
    useEffect(() => {
       const loadData = async () => {
-         // Only show loader if no cached data
-         if (transactions.length === 0 && listings.length === 0) setLoading(true);
+         // If we have cached data, don't show loader
+         if (cachedData) {
+            setLoading(false);
+         }
          
          try {
             await Promise.all([fetchTransactions(), fetchListings()]);
+            // Cache the data
+            localStorage.setItem('factory_analytics_cache', JSON.stringify({ timestamp: Date.now() }));
          } catch (error) {
             console.error('Failed to load analytics data:', error);
          } finally {
@@ -20,226 +42,571 @@ export default function Analytics() {
          }
       };
       loadData();
-   }, [fetchTransactions, fetchListings]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []);
 
-  // All hooks must be called before conditional logic
-  // 1. Core Data Filtration
-  const myTransactions = useMemo(() => 
-    transactions.filter(t => t.sellerId === user?.id), 
-  [transactions, user]);
+  // Filter data based on timeframe
+  const getFilteredData = () => {
+    if (!transactions || transactions.length === 0) return [];
+    
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch(timeFrame) {
+      case '1m':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '6m':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate = new Date(0);
+    }
+    
+    return transactions.filter(t => {
+      // If user not loaded yet, show all transactions
+      if (!user?.id) return true;
+      
+      // Check sellerId match (factory is the seller)
+      const sellerMatch = t.sellerId === user.id;
+      if (!sellerMatch) return false;
+      
+      // Check date - safely parse date
+      try {
+        const tDate = new Date(t.date);
+        return tDate >= startDate;
+      } catch {
+        return true; // If date parsing fails, include it
+      }
+    });
+  };
 
-  const mySoldListings = useMemo(() => 
-     listings.filter(l => l.factoryId === user?.id && l.status === 'Sold'),
-  [listings, user]);
+  const filteredTransactions = getFilteredData();
+  const myListings = useMemo(() => listings?.filter(l => l.factoryId === user?.id) || [], [listings, user?.id]);
+  const soldListings = useMemo(() => myListings.filter(l => l.status === 'Sold'), [myListings]);
 
-  // 2. Metrics Calculation
-  const totalRevenue = useMemo(() => 
-    myTransactions.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0),
-  [myTransactions]);
+  // Debug logging
+  React.useEffect(() => {
+    console.log('🏭 [Factory Analytics] Data state:', {
+      transactions: transactions?.length || 0,
+      filteredTransactions: filteredTransactions.length,
+      myListings: myListings.length,
+      soldListings: soldListings.length,
+      user: user?.id,
+      timeFrame
+    });
+  }, [transactions, filteredTransactions, myListings, soldListings, user, timeFrame]);
 
-  const totalVolume = useMemo(() => 
-    mySoldListings.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0),
-  [mySoldListings]);
+  // Calculate KPIs
+  const totalRevenue = filteredTransactions.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+  const salesCount = filteredTransactions.length;
+  const averageOrderValue = salesCount > 0 ? totalRevenue / salesCount : 0;
+  
+  // Calculate commission earned (platform takes commission from seller)
+  const totalCommission = filteredTransactions.reduce((acc, t) => acc + (parseFloat(t.commission) || 0), 0);
+  const netRevenue = totalRevenue - totalCommission;
 
-  const yieldIndex = totalVolume > 0 ? (totalRevenue / totalVolume).toFixed(2) : '0.00';
+  // Calculate previous period for comparison
+  const getPreviousPeriodData = () => {
+    if (!transactions || transactions.length === 0) return { revenue: 0, sales: 0 };
+    
+    const now = new Date();
+    let prevStart = new Date();
+    let prevEnd = new Date();
+    
+    switch(timeFrame) {
+      case '1m':
+        prevStart.setMonth(now.getMonth() - 2);
+        prevEnd.setMonth(now.getMonth() - 1);
+        break;
+      case '6m':
+        prevStart.setMonth(now.getMonth() - 12);
+        prevEnd.setMonth(now.getMonth() - 6);
+        break;
+      case '1y':
+        prevStart.setFullYear(now.getFullYear() - 2);
+        prevEnd.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        return { revenue: 0, sales: 0 };
+    }
+    
+    const prevTransactions = transactions.filter(t => {
+      if (!user?.id || t.sellerId !== user.id) return false;
+      try {
+        const tDate = new Date(t.date);
+        return tDate >= prevStart && tDate < prevEnd;
+      } catch {
+        return false;
+      }
+    });
+    
+    return {
+      revenue: prevTransactions.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0),
+      sales: prevTransactions.length
+    };
+  };
 
-  // 3. Chart Data Construction (Last 6 Months)
-  const chartData = useMemo(() => {
-     const data = [];
-     const today = new Date();
-     for (let i = 5; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const monthName = d.toLocaleString('default', { month: 'short' });
-        
-        const monthlyRevenue = myTransactions
-           .filter(t => {
-              const tDate = new Date(t.date);
-              return tDate.getMonth() === d.getMonth() && tDate.getFullYear() === d.getFullYear();
-           })
-           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-        
-        data.push({ month: monthName, revenue: monthlyRevenue });
-     }
-     return data;
-  }, [myTransactions]);
+  const previousPeriod = getPreviousPeriodData();
+  const revenueGrowth = previousPeriod.revenue > 0 
+    ? ((totalRevenue - previousPeriod.revenue) / previousPeriod.revenue) * 100 
+    : 0;
+  const salesGrowth = previousPeriod.sales > 0
+    ? ((salesCount - previousPeriod.sales) / previousPeriod.sales) * 100
+    : 0;
 
-  const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1000); // Avoid divide by zero
+  // Calculate material volume from transactions
+  const volumeSold = filteredTransactions.reduce((acc, t) => acc + (parseFloat(t.quantity) || 0), 0);
+  const co2Saved = volumeSold * 15; // 15kg CO2 per kg textile waste
 
-  // 4. Asset Composition (Group by Category)
-  const composition = useMemo(() => {
-     const groups = {};
-     mySoldListings.forEach(l => {
-        const cat = l.fabricCategory || 'Other';
-        if (!groups[cat]) groups[cat] = 0;
-        groups[cat] += Number(l.price) * Number(l.quantity); // Est. Value
-     });
-     
-     // Convert to array and format
-     const totalVal = Object.values(groups).reduce((a, b) => a + b, 0) || 1;
-     return Object.entries(groups)
-        .map(([name, val]) => ({
-           name,
-           value: val,
-           percentage: Math.round((val / totalVal) * 100)
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 4); // Top 4
-  }, [mySoldListings]);
+  // Calculate revenue trend
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const revenueTrend = [];
+  const monthsToShow = timeFrame === '1m' ? 4 : timeFrame === '6m' ? 6 : 12;
+  
+  for (let i = monthsToShow - 1; i >= 0; i--) {
+    let m = currentMonth - i;
+    let y = currentYear;
+    if (m < 0) {
+      m += 12;
+      y -= 1;
+    }
+    const monthTransactions = filteredTransactions.filter(t => {
+      try {
+        const d = new Date(t.date);
+        return d.getMonth() === m && d.getFullYear() === y;
+      } catch {
+        return false;
+      }
+    });
+    const monthRevenue = monthTransactions.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+    const monthSales = monthTransactions.length;
+    const monthVolume = monthTransactions.reduce((acc, t) => {
+      const listing = myListings.find(l => l.id === t.listingId);
+      return acc + (listing ? parseFloat(listing.quantity) || 0 : 0);
+    }, 0);
+    
+    revenueTrend.push({ 
+      month: months[m], 
+      revenue: monthRevenue || 0,
+      sales: monthSales,
+      volume: monthVolume,
+      net: monthRevenue - (monthTransactions.reduce((acc, t) => acc + (parseFloat(t.commission) || 0), 0))
+    });
+  }
 
-   if (loading) {
+  // Material categories from transactions
+  const materialBreakdown = filteredTransactions.reduce((acc, t) => {
+    const category = t.fabricType || t.fabricCategory || 'Other';
+    const revenue = parseFloat(t.amount) || 0;
+    if (!acc[category]) {
+      acc[category] = { count: 0, volume: 0, revenue: 0 };
+    }
+    acc[category].count += 1;
+    acc[category].volume += parseFloat(t.quantity) || 0;
+    acc[category].revenue += revenue;
+    return acc;
+  }, {});
+
+  const materialData = useMemo(() => {
+    const entries = Object.entries(materialBreakdown);
+    const total = entries.reduce((sum, [, data]) => sum + data.count, 0);
+    return entries.map(([name, data]) => ({
+      name,
+      count: data.count,
+      volume: data.volume,
+      revenue: data.revenue,
+      percentage: total > 0 ? (data.count / total) * 100 : 0,
+      value: data.revenue
+    })).sort((a, b) => b.revenue - a.revenue);
+  }, [materialBreakdown]);
+
+  // Listing status
+  const statusData = useMemo(() => {
+    const live = myListings.filter(l => l.status === 'Live').length;
+    const sold = myListings.filter(l => l.status === 'Sold').length;
+    const pending = myListings.filter(l => l.status === 'Pending').length;
+    const total = live + sold + pending || 1;
+    
+    return [
+      { name: 'Live', count: live, percentage: (live / total) * 100, color: '#10b981', value: live },
+      { name: 'Sold', count: sold, percentage: (sold / total) * 100, color: '#3b82f6', value: sold },
+      { name: 'Pending', count: pending, percentage: (pending / total) * 100, color: '#f59e0b', value: pending }
+    ].filter(item => item.count > 0);
+  }, [myListings]);
+
+  // Show loader while fetching data
+  if (loading) {
       return (
          <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+              <p className="text-slate-600 dark:text-slate-400">Loading analytics...</p>
+            </div>
+         </div>
+      );
+   }
+
+  // Show empty state if no data after loading
+  if (!loading && (!transactions || transactions.length === 0)) {
+      return (
+         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+            <div className="text-center">
+              <Package className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">No Sales Yet</h2>
+              <p className="text-slate-600 dark:text-slate-400 mb-6">Start selling inventory to see your analytics</p>
+            </div>
          </div>
       );
    }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="max-w-7xl mx-auto space-y-6 pb-16 px-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pt-8">
         <div>
-           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Performance Analytics</h1>
-           <p className="text-slate-500 dark:text-slate-400 mt-1">Live financial and impact analysis.</p>
+           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-2">
+             Factory <span className="text-emerald-600 dark:text-emerald-400">Analytics</span>
+           </h1>
+           <p className="text-slate-600 dark:text-slate-400 text-lg">Track your sales performance and environmental impact</p>
         </div>
-        <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1 flex space-x-1">
-           <button className="px-3 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm rounded-md shadow-sm font-medium">6 Months</button>
-           <button className="px-3 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white text-sm transition-colors">1 Year</button>
+        
+        {/* Time Frame Selector */}
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-1 flex gap-1 shadow-sm">
+           {['1m', '6m', '1y'].map(period => (
+             <button
+               key={period}
+               onClick={() => setTimeFrame(period)}
+               className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                 timeFrame === period
+                   ? 'bg-emerald-600 text-white shadow-lg'
+                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+               }`}
+             >
+               {period === '1m' ? '1 Month' : period === '6m' ? '6 Months' : '1 Year'}
+             </button>
+           ))}
         </div>
       </div>
 
-      {/* High-Fidelity Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <MetricCard 
-           title="Gross Revenue" 
-           value={`₹${totalRevenue.toLocaleString()}`} 
-           change="+--" 
-           isPositive={true}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <KPICard
+           title="Total Revenue"
+           value={`₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+           subtitle={`Net: ₹${netRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
            icon={<BadgeDollarSign />}
-           color="text-emerald-500"
-           bg="bg-emerald-50 dark:bg-emerald-500/10"
+           trend={revenueGrowth}
+           color="blue"
         />
-        <MetricCard 
-           title="Avg. Yield" 
-           value={`₹${yieldIndex}/kg`} 
-           change="Dynamic" 
-           isPositive={true}
-           icon={<TrendingUp />}
-           color="text-blue-500"
-           bg="bg-blue-50 dark:bg-blue-500/10"
+        <KPICard
+           title="Sales Count"
+           value={salesCount}
+           subtitle={`₹${averageOrderValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })} avg order`}
+           icon={<ShoppingBag />}
+           trend={salesGrowth}
+           color="purple"
         />
-        <MetricCard 
-           title="Volume Sold" 
-           value={`${totalVolume.toLocaleString()} kg`} 
-           change="Total" 
-           isPositive={true}
-           icon={<Activity />}
-           color="text-purple-500"
-           bg="bg-purple-50 dark:bg-purple-500/10"
+        <KPICard
+           title="Volume Sold"
+           value={`${volumeSold.toFixed(1)} kg`}
+           subtitle={`${soldListings.length} listings sold`}
+           icon={<Package />}
+           trend={20}
+           color="green"
         />
       </div>
 
-      {/* Main Signal Area (Chart) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 md:p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none">
-         <div className="flex justify-between items-center mb-12">
-            <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center gap-3">
-               <Calendar className="text-blue-500" /> Revenue Flow Matrix
+      {/* Revenue Trend - Area Chart */}
+      <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-lg">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+            <TrendingUp className="text-emerald-600" size={28} /> Revenue Trend
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 text-sm">Gross and net revenue over time</p>
+        </div>
+        
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={revenueTrend}>
+            <defs>
+              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+              </linearGradient>
+              <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey="month" stroke="#64748b" />
+            <YAxis stroke="#64748b" tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={3} name="Gross" />
+            <Area type="monotone" dataKey="net" stroke="#3b82f6" fillOpacity={1} fill="url(#colorNet)" strokeWidth={2} name="Net" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Material & Status Distribution */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Material Distribution Pie Chart */}
+        <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-lg">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+              <PieChart className="text-purple-600" size={28} /> Material Revenue
             </h2>
-            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-               <div className="w-3 h-3 bg-blue-500 rounded-full"></div> Gross Profit
-            </div>
-         </div>
-         
-         <div className="h-64 flex items-end justify-between gap-2 md:gap-4">
-            {chartData.map((data, index) => {
-               const heightPercent = maxRevenue > 0 ? (data.revenue / maxRevenue) * 100 : 0;
-               return (
-                  <div key={index} className="w-full h-full flex flex-col items-center group cursor-pointer">
-                     <div className="relative w-full h-full flex items-end mb-4">
-                        <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100 bg-slate-900 dark:bg-white text-white dark:text-black text-[10px] font-black py-2 px-4 rounded-xl whitespace-nowrap z-10 shadow-2xl pointer-events-none">
-                           ₹{data.revenue.toLocaleString()}
-                        </div>
-                        <div 
-                           style={{ height: `${Math.max(heightPercent, 2)}%` }} 
-                           className="w-full bg-linear-to-t from-blue-600/10 to-blue-500 dark:from-blue-500/20 dark:to-blue-400 rounded-2xl group-hover:to-emerald-400 transition-all duration-700 relative min-h-2.5"
-                        >
-                           <div className="absolute top-0 w-full h-1.5 bg-white/20 dark:bg-blue-300/30 rounded-full blur-[2px]"></div>
-                        </div>
-                     </div>
-                     <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{data.month}</span>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">Revenue breakdown by fabric type</p>
+          </div>
+          
+          {materialData.length > 0 ? (
+            <div className="flex flex-col lg:flex-row items-center gap-6">
+              <ResponsiveContainer width="100%" height={250}>
+                <RePieChart>
+                  <Pie
+                    data={materialData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={renderCustomLabel}
+                    outerRadius={90}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {materialData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomPieTooltip />} />
+                </RePieChart>
+              </ResponsiveContainer>
+              
+              <div className="w-full space-y-2">
+                {materialData.slice(0, 5).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">₹{(item.revenue/1000).toFixed(0)}k</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">({item.percentage.toFixed(0)}%)</span>
+                    </div>
                   </div>
-               );
-            })}
-         </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <EmptyState message="No material data available" />
+          )}
+        </div>
+
+        {/* Listing Status Donut Chart */}
+        <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-lg">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+              <Target className="text-blue-600" size={28} /> Listing Status
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">Distribution by listing status</p>
+          </div>
+          
+          {myListings.length > 0 ? (
+            <div className="flex flex-col lg:flex-row items-center gap-6">
+              <ResponsiveContainer width="100%" height={250}>
+                <RePieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    fill="#8884d8"
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomPieTooltip />} />
+                </RePieChart>
+              </ResponsiveContainer>
+              
+              <div className="w-full space-y-2">
+                {statusData.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">{item.count}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">({item.percentage.toFixed(0)}%)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <EmptyState message="No listing data available" />
+          )}
+        </div>
       </div>
 
-      {/* Secondary Insights Matrix */}
-      <div className="grid lg:grid-cols-5 gap-8">
-         <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[3rem] shadow-2xl shadow-slate-200/50 dark:shadow-none">
-            <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-8">Revenue Composition</h3>
-            <div className="space-y-8">
-               {composition.length > 0 ? composition.map((c, i) => (
-                  <CompositionRow 
-                     key={i}
-                     name={c.name} 
-                     percentage={c.percentage} 
-                     value={`₹${c.value.toLocaleString()}`} 
-                     color={['bg-emerald-500', 'bg-blue-500', 'bg-indigo-500', 'bg-purple-500'][i % 4]} 
-                  />
-               )) : (
-                  <div className="text-center py-10 text-slate-400">
-                     <p className="text-sm font-bold uppercase">No Sales Data</p>
-                  </div>
-               )}
-            </div>
-         </div>
-         
-         <div className="lg:col-span-2 bg-linear-to-br from-indigo-600 to-blue-700 p-10 rounded-[3rem] text-white overflow-hidden shadow-2xl shadow-blue-500/20 group relative cursor-pointer">
-            <Globe className="absolute -right-12 -bottom-12 w-64 h-64 text-white/10 group-hover:scale-110 transition-transform duration-1000" />
-            <div className="relative z-10 flex flex-col h-full">
-               <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md mb-8 group-hover:scale-110 transition-transform">
-                  <Zap size={28} />
-               </div>
-               <h3 className="text-2xl font-black tracking-tighter mb-4 leading-tight">Expansion Protocol Identified</h3>
-               <p className="text-indigo-100 text-sm font-medium mb-10 leading-relaxed">
-                  High-yield demand detected in the <strong>Southeast Asian</strong> corridor for your current inventory class. Premium valuation up to 18%.
-               </p>
-               <button className="mt-auto bg-white text-indigo-700 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-indigo-50 flex items-center justify-center gap-3">
-                  Analyze Corridor <ArrowUpRight size={16} />
-               </button>
-            </div>
-         </div>
+      {/* Environmental Impact */}
+      <div className="bg-linear-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border border-emerald-200 dark:border-emerald-700 rounded-2xl p-8 shadow-lg">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+            <Leaf className="text-emerald-600" size={28} /> Environmental Impact
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400">Your contribution to circular economy</p>
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-6">
+          <ImpactMetric
+            label="CO₂ Emissions Prevented"
+            value={`${co2Saved.toFixed(1)} kg`}
+            description={`${(co2Saved / 21).toFixed(0)} trees equivalent`}
+            icon="🌳"
+          />
+          <ImpactMetric
+            label="Waste Recycled"
+            value={`${volumeSold.toFixed(1)} kg`}
+            description="Diverted from landfills"
+            icon="♻️"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function MetricCard({ title, value, change, isPositive, icon, color, bg }) {
-   return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-[2.5rem] shadow-2xl shadow-slate-200/50 dark:shadow-none flex flex-col gap-6 group hover:border-blue-500/30 transition-all">
-         <div className="flex justify-between items-start">
-            <div className={`w-14 h-14 rounded-2xl ${bg} ${color} flex items-center justify-center shadow-lg border border-transparent group-hover:border-inherit transition-all`}>
-               {React.cloneElement(icon, { size: 28 })}
-            </div>
-         </div>
-         <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">{title}</p>
-            <h3 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{value}</h3>
-         </div>
+
+function KPICard({ title, value, subtitle, icon, trend, color }) {
+  const colors = {
+    blue: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30',
+    purple: 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30',
+    green: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30',
+    amber: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30'
+  };
+
+  const isPositive = trend >= 0;
+
+  return (
+    <div className={`border rounded-2xl p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl ${colors[color]}`}>
+      <div className="flex justify-between items-start mb-4">
+        <div className="p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+          {React.cloneElement(icon, { size: 24 })}
+        </div>
+        {trend !== undefined && (
+          <div className={`flex items-center gap-1 text-sm font-bold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+            {isPositive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+            {Math.abs(trend).toFixed(1)}%
+          </div>
+        )}
       </div>
-   );
+      <p className="text-sm font-semibold opacity-75 mb-1">{title}</p>
+      <h3 className="text-3xl font-bold mb-2">{value}</h3>
+      <p className="text-xs opacity-60">{subtitle}</p>
+    </div>
+  );
 }
 
-function CompositionRow({ name, percentage, value, color }) {
-   return (
-      <div className="group">
-         <div className="flex justify-between items-end text-[10px] font-black uppercase tracking-widest mb-3">
-            <span className="text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{name}</span>
-            <span className="text-slate-900 dark:text-white">{value}</span>
-         </div>
-         <div className="w-full h-3 bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-100 dark:border-slate-700">
-            <div className={`h-full ${color} rounded-full group-hover:brightness-110 transition-all`} style={{ width: `${percentage}%` }} />
-         </div>
+function CustomTooltip({ active, payload, label }) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
+        <p className="font-bold text-slate-900 dark:text-white mb-1">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            {entry.name}: 
+            <span className="font-bold ml-1">
+              ₹{entry.value.toLocaleString('en-IN')}
+            </span>
+          </p>
+        ))}
       </div>
-   );
+    );
+  }
+  return null;
 }
 
+function CustomPieTooltip({ active, payload }) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
+        <p className="font-bold text-slate-900 dark:text-white mb-1">{data.name}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Count: <span className="font-bold">{data.count}</span>
+        </p>
+        {data.revenue && (
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Revenue: <span className="font-bold">₹{data.revenue.toLocaleString('en-IN')}</span>
+          </p>
+        )}
+        {data.volume && (
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Volume: <span className="font-bold">{data.volume.toFixed(1)} kg</span>
+          </p>
+        )}
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Percentage: <span className="font-bold">{data.percentage.toFixed(1)}%</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
+const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  if (percent < 0.05) return null; // Don't show label if less than 5%
+
+  return (
+    <text 
+      x={x} 
+      y={y} 
+      fill="white" 
+      textAnchor={x > cx ? 'start' : 'end'} 
+      dominantBaseline="central"
+      className="text-xs font-bold"
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
+function EmptyState({ message }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-72">
+      <AlertCircle className="text-slate-400 dark:text-slate-600 mb-4" size={48} />
+      <p className="text-slate-500 dark:text-slate-400 font-semibold">{message}</p>
+    </div>
+  );
+}
+
+function ImpactMetric({ label, value, description, icon }) {
+  return (
+    <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm p-5 rounded-xl border border-emerald-200 dark:border-emerald-700/50 hover:shadow-lg transition-shadow">
+      <div className="flex items-start gap-4">
+        <span className="text-4xl">{icon}</span>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1">{label}</p>
+          <p className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
