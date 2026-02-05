@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DollarSign, Scale, Leaf, ArrowRight, Activity, Plus, Package, TrendingUp, BarChart3, Recycle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -7,8 +7,43 @@ import cottonImg from '../../assets/cotton_fabric.png';
 import polyesterImg from '../../assets/polyester_fabric.png';
 
 export default function FactoryDashboard() {
-  const { user, listings, getStats, bulkRequests, transactions } = useApp();
+  const { user, listings, getStats, bulkRequests, transactions, fetchListings, fetchBulkRequests, fetchTransactions } = useApp();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = (listings && listings.length > 0) || (transactions && transactions.length > 0);
+      if (!hasData) setLoading(true);
+      
+      try {
+        await Promise.all([
+          fetchListings(),
+          fetchBulkRequests(),
+          fetchTransactions()
+        ]);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchListings, fetchBulkRequests, fetchTransactions]);
+
+  // Show loader only if we're fetching AND we have no data
+  if (loading && (!listings || listings.length === 0) && (!transactions || transactions.length === 0)) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   const stats = getStats();
 
   // Filter listings for the current authenticated factory

@@ -2,38 +2,77 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { FileText, Calendar, IndianRupee, Send, ArrowLeft } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 export default function SubmitProposal() {
   const { requestId } = useParams();
   const navigate = useNavigate();
-  const { bulkRequests, submitProposal, user } = useApp();
+  const { bulkRequests, submitProposal, user, fetchBulkRequests } = useApp();
   const [request, setRequest] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Only show loader if no cached data
+      if (bulkRequests.length === 0) setLoading(true);
+      
+      try {
+        await fetchBulkRequests();
+      } catch (error) {
+        console.error('Failed to load bulk requests:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchBulkRequests]);
 
   // Form State
   const [formData, setFormData] = useState({
     pricePerKg: '',
-    deliveryDate: '',
+    deliveryDate: (() => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow;
+    })(),
     message: '',
   });
 
   const validateDeliveryDate = (date) => {
-    const today = new Date().toISOString().split('T')[0];
-    const deadline = request?.deadline ? new Date(request.deadline).toISOString().split('T')[0] : null;
-    
-    if (date < today) {
+    if (!date) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
       return "Delivery date cannot be in the past";
     }
-    if (deadline && date > deadline) {
-      return "Delivery date must be before the request deadline";
+
+    if (request?.deadline) {
+      try {
+        const deadlineDate = new Date(request.deadline);
+        deadlineDate.setHours(23, 59, 59, 999); // End of deadline day
+
+        if (selectedDate > deadlineDate) {
+          return `Delivery date must be on or before ${deadlineDate.toLocaleDateString()}`;
+        }
+      } catch {
+        // If deadline parsing fails, allow the date
+        console.warn('Could not parse deadline date:', request.deadline);
+      }
     }
+
     return null;
   };
 
-  const handleDateChange = (e) => {
-    const date = e.target.value;
+  const handleDateChange = (date) => {
     const error = validateDeliveryDate(date);
     
     setFormData({...formData, deliveryDate: date});
@@ -52,10 +91,36 @@ export default function SubmitProposal() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate all fields
+    // Comprehensive validation
+    const newErrors = {};
+    
+    // Price validation
+    if (!formData.pricePerKg || formData.pricePerKg === '') {
+      newErrors.pricePerKg = 'Price per kg is required';
+    } else if (Number(formData.pricePerKg) <= 0) {
+      newErrors.pricePerKg = 'Price must be greater than 0';
+    } else if (Number(formData.pricePerKg) > 10000) {
+      newErrors.pricePerKg = 'Price seems unreasonably high (max ₹10,000/kg)';
+    }
+    
+    // Delivery date validation
     const dateError = validateDeliveryDate(formData.deliveryDate);
     if (dateError) {
-      setErrors({...errors, deliveryDate: dateError});
+      newErrors.deliveryDate = dateError;
+    }
+    
+    // Message validation (optional but validate if provided)
+    if (formData.message && formData.message.trim().length > 0) {
+      if (formData.message.trim().length < 5) {
+        newErrors.message = 'Message must be at least 5 characters if provided';
+      } else if (formData.message.trim().length > 500) {
+        newErrors.message = 'Message must be less than 500 characters';
+      }
+    }
+    
+    setErrors(newErrors);
+    
+    if (Object.keys(newErrors).length > 0) {
       return;
     }
 
@@ -70,7 +135,7 @@ export default function SubmitProposal() {
          factoryName: user?.company_name || user?.name || 'Verified Factory',
          priceQuoted: formData.pricePerKg,
          totalPrice: Number(formData.pricePerKg) * Number(request.quantity),
-         deliveryDate: formData.deliveryDate,
+         deliveryDate: formData.deliveryDate.toISOString().split('T')[0],
          message: formData.message,
       });
       alert('Proposal Submitted Successfully!');
@@ -82,6 +147,14 @@ export default function SubmitProposal() {
       setSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   if (!request) return <div className="p-10 text-center text-slate-500">Loading Request Details...</div>;
 
@@ -126,43 +199,41 @@ export default function SubmitProposal() {
                   <div>
                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-400 mb-2">Offered Price per Kg (₹)</label>
                      <div className="relative">
-                        <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                        <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400" />
                         <input 
                            type="number" 
                            required
                            value={formData.pricePerKg}
-                           onChange={e => setFormData({...formData, pricePerKg: e.target.value})}
-                           className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-10 pr-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder-slate-400"
+                           onChange={e => {
+                             setFormData({...formData, pricePerKg: e.target.value});
+                             if (errors.pricePerKg) setErrors({...errors, pricePerKg: ''});
+                           }}
+                           className={`w-full bg-slate-50 dark:bg-slate-900 border ${errors.pricePerKg ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg pl-10 pr-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder-slate-400`}
                            placeholder="0.00"
                         />
                      </div>
+                     {errors.pricePerKg && <p className="text-red-500 text-xs mt-1">{errors.pricePerKg}</p>}
                   </div>
                   
                   <div>
                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-400 mb-2">
                        Earliest Delivery Date 
                        <span className="text-xs text-slate-500 ml-1">
-                         (before {request.deadline ? new Date(request.deadline).toLocaleDateString() : 'deadline'})
+                         (from today{request?.deadline ? ` to ${new Date(request.deadline).toLocaleDateString()}` : ', up to 90 days'})
                        </span>
                      </label>
                      <div className="relative">
-                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-                        <input 
-                           type="date" 
-                           required
-                           min={new Date().toISOString().split('T')[0]}
-                           max={request.deadline ? (() => {
-                             try {
-                               return new Date(request.deadline).toISOString().split('T')[0];
-                             } catch {
-                               return undefined;
-                             }
-                           })() : undefined}
-                           value={formData.deliveryDate}
+                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400 z-10" />
+                        <DatePicker
+                           selected={formData.deliveryDate}
                            onChange={handleDateChange}
-                           className={`w-full bg-slate-50 dark:bg-slate-900 border rounded-lg pl-10 pr-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all ${
+                           required
+                           minDate={new Date()}
+                           maxDate={request?.deadline ? new Date(request.deadline) : new Date(new Date().setDate(new Date().getDate() + 90))}
+                           className={`w-full bg-slate-50 dark:bg-slate-900 border rounded-lg pl-10 pr-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all cursor-pointer ${
                              errors.deliveryDate ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'
                            }`}
+                           dateFormat="yyyy-MM-dd"
                         />
                      </div>
                      {errors.deliveryDate && (
@@ -176,10 +247,15 @@ export default function SubmitProposal() {
                   <textarea 
                      rows="4"
                      value={formData.message}
-                     onChange={e => setFormData({...formData, message: e.target.value})}
-                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none placeholder-slate-400"
+                     onChange={e => {
+                       setFormData({...formData, message: e.target.value});
+                       if (errors.message) setErrors({...errors, message: ''});
+                     }}
+                     className={`w-full bg-slate-50 dark:bg-slate-900 border ${errors.message ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-lg px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none placeholder-slate-400`}
                      placeholder="Describe your material quality, logistics, or any terms..."
                   />
+                  {errors.message && <p className="text-red-500 text-xs mt-1">{errors.message}</p>}
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{formData.message.length}/500</p>
                </div>
 
                {/* Summary Calculation */}

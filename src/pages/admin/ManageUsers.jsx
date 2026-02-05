@@ -1,17 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MoreVertical, ShieldCheck, Mail, AlertTriangle, Factory, ShoppingBag, UserPlus, History, Filter, X, Check, Trash2, Edit2, User, Phone, MapPin, FileText, Briefcase, Zap, Building2, Globe } from 'lucide-react';
+import { Search, MoreVertical, ShieldCheck, Mail, AlertTriangle, Factory, ShoppingBag, UserPlus, History, Filter, X, Check, Trash2, Edit2, User, Phone, MapPin, FileText, Briefcase, Zap, Building2, Globe, CheckCircle2, Clock, ChevronDown } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function ManageUsers() {
-  const { users, setUsers, approvalHistory, logApprovalAction, updateUserStatus, deleteUser, updateUser, addUser } = useApp();
+  const { users, fetchUsers, setUsers, approvalHistory, logApprovalAction, updateUserStatus, deleteUser, updateUser, addUser, updateVerificationStatus } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Factory'); // 'Factory' or 'Buyer'
   const [statusFilter, setStatusFilter] = useState('All');
+  const [verificationFilter, setVerificationFilter] = useState('All'); // All, Verified, Pending, Unverified
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null); // For detailed view
   const [editingUser, setEditingUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch users on component mount
+  useEffect(() => {
+    const loadUsers = async () => {
+      // Check if we have cached data
+      const hasCachedUsers = sessionStorage.getItem('retex_cache_users');
+      
+      // Only show loading if no cached data
+      if (!hasCachedUsers) {
+        setIsLoading(true);
+      }
+
+      try {
+        await fetchUsers();
+        console.log('✅ [ManageUsers] Users loaded from database');
+      } catch (error) {
+        console.error('❌ [ManageUsers] Failed to load users:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadUsers();
+  }, [fetchUsers]);
 
   // Debouncing Search
   useEffect(() => {
@@ -21,18 +46,37 @@ export default function ManageUsers() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  // Unified Filter Logic
+  // Unified Filter Logic - Handle both Factory and Buyer roles
   const filteredUsers = users.filter(u => {
-      const matchesTab = u.role === activeTab;
+      const userRole = u.role ? u.role.toLowerCase() : 'buyer';
+      const tabRole = activeTab.toLowerCase();
+      const matchesTab = userRole === tabRole;
       const matchesSearch = (u.name || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
-                            (u.email || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+                            (u.email || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                            (u.companyName || '').toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'All' || u.status === statusFilter;
       
-      return matchesTab && matchesSearch && matchesStatus;
+      let matchesVerification = true;
+      if (verificationFilter === 'Verified') {
+        matchesVerification = u.isVerified === true;
+      } else if (verificationFilter === 'Pending') {
+        matchesVerification = u.verificationStatus === 'pending';
+      } else if (verificationFilter === 'Unverified') {
+        matchesVerification = u.isVerified === false && u.verificationStatus !== 'pending';
+      }
+      
+      return matchesTab && matchesSearch && matchesStatus && matchesVerification;
   });
 
-  const handleStatusChange = (id, newStatus, userName) => {
-     updateUserStatus(id, newStatus, userName);
+  const handleStatusChange = async (id, newStatus, userName) => {
+     try {
+       console.log(`🔄 [ManageUsers] Changing status for user ${id} to ${newStatus}`);
+       await updateUserStatus(id, newStatus, userName);
+       console.log(`✅ [ManageUsers] Status updated successfully to ${newStatus}`);
+     } catch (error) {
+       console.error('❌ [ManageUsers] Status update failed:', error);
+       alert(`Failed to update status: ${error.message}`);
+     }
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,6 +116,18 @@ export default function ManageUsers() {
        }
    };
 
+   const handleVerificationStatusChange = async (userId, status) => {
+       try {
+           console.log(`🔄 [ManageUsers] Updating verification for user ${userId} to ${status}`);
+           await updateVerificationStatus(userId, status);
+           console.log(`✅ [ManageUsers] Verification updated successfully to ${status}`);
+           alert(`User verification status updated to: ${status}`);
+       } catch (error) {
+           console.error("❌ [ManageUsers] Verification update failed:", error);
+           alert("Failed to update verification status: " + (error.message || "Unknown error"));
+       }
+   };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 transition-colors duration-300">
        {/* Header */}
@@ -81,6 +137,25 @@ export default function ManageUsers() {
             <p className="text-slate-500 dark:text-slate-400 mt-1">Manage factories, buyers, and platform access.</p>
           </div>
           <div className="flex gap-3">
+             <button 
+                onClick={async () => {
+                  setIsLoading(true);
+                  try {
+                    await fetchUsers();
+                    console.log('✅ Data refreshed');
+                  } catch (error) {
+                    console.error('❌ Refresh failed:', error);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors shadow-sm disabled:opacity-50"
+                title="Refresh user data from database"
+             >
+                <Search size={18} />
+                <span className="hidden sm:inline">Refresh</span>
+             </button>
              <button 
                 onClick={() => setShowHistoryModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors shadow-sm"
@@ -137,6 +212,21 @@ export default function ManageUsers() {
                 <Filter className="absolute left-3 top-3 text-slate-500 w-4 h-4 pointer-events-none" />
              </div>
 
+             {/* Verification Filter */}
+             <div className="relative">
+                <select 
+                   value={verificationFilter}
+                   onChange={(e) => setVerificationFilter(e.target.value)}
+                   className="appearance-none bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 pl-10 pr-8 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none w-full sm:w-48"
+                >
+                   <option value="All">All Verification</option>
+                   <option value="Verified">✓ Verified Only</option>
+                   <option value="Pending">⏳ Pending Verification</option>
+                   <option value="Unverified">✗ Unverified</option>
+                </select>
+                <ShieldCheck className="absolute left-3 top-3 text-amber-500 w-4 h-4 pointer-events-none" />
+             </div>
+
              {/* Search */}
              <div className="relative w-full sm:w-64">
                 <input 
@@ -159,10 +249,10 @@ export default function ManageUsers() {
                    <tr>
                       <th className="px-6 py-4 w-1/4">User Details</th>
                       <th className="px-6 py-4">Type</th>
-                      <th className="px-6 py-4 w-1/6">Location</th>
                       <th className="px-6 py-4 w-1/6">Status</th>
+                      <th className="px-6 py-4 w-1/5">Verification</th>
                       <th className="px-6 py-4">Joined</th>
-                      <th className="px-6 py-4 text-right w-1/6">Actions</th>
+                      <th className="px-6 py-4 text-right w-1/4">Actions</th>
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -187,69 +277,21 @@ export default function ManageUsers() {
                             <td className="px-6 py-4 text-slate-600 dark:text-slate-300 text-sm">
                                {user.type || user.role}
                             </td>
-                            <td className="px-6 py-4 text-slate-600 dark:text-slate-300 text-sm max-w-[150px] truncate" title={user.location}>
-                               {user.location || 'N/A'}
-                            </td>
                             <td className="px-6 py-4">
                                <StatusIndicator status={user.status || 'Pending'} />
                             </td>
+                            <td className="px-6 py-4">
+                               <VerificationBadge status={user.verificationStatus} isVerified={user.isVerified} />
+                            </td>
                             <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm whitespace-nowrap">{user.joinDate}</td>
                             <td className="px-6 py-4 text-right">
-                               <div className="flex justify-end gap-2">
-                                 {( !user.status || user.status === 'Pending' || user.status === 'Rejected') && (
-                                     <>
-                                        <button 
-                                           onClick={(e) => { e.stopPropagation(); handleStatusChange(user.id, 'Verified', user.name); }} 
-                                           className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-colors"
-                                           title="Approve"
-                                        >
-                                           <Check size={16} />
-                                        </button>
-                                        {user.status !== 'Rejected' && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleStatusChange(user.id, 'Rejected', user.name); }} 
-                                                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 transition-colors"
-                                                title="Reject"
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        )}
-                                     </>
-                                 )}
-                                 {user.status === 'Verified' && (
-                                    <button 
-                                       onClick={(e) => { e.stopPropagation(); handleStatusChange(user.id, 'Blocked', user.name); }} 
-                                       className="text-xs bg-slate-200 dark:bg-slate-700 hover:bg-red-500/20 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:border-red-500/30 transition-colors"
-                                    >
-                                       Block
-                                    </button>
-                                 )}
-                                 {user.status === 'Blocked' && (
-                                    <button 
-                                       onClick={(e) => { e.stopPropagation(); handleStatusChange(user.id, 'Verified', user.name); }} 
-                                       className="text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-colors"
-                                    >
-                                       Unblock
-                                    </button>
-                                 )}
-                                 {/* Edit User Button */}
-                                 <button 
-                                     onClick={(e) => { e.stopPropagation(); setShowAddUserModal(true); setEditingUser(user); }}
-                                     className="text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/30 transition-colors flex items-center gap-1"
-                                     title="Edit Details"
-                                 >
-                                    <Edit2 size={12} /> Edit
-                                 </button>
-                                 
-                                 {/* Delete User Button */}
-                                  <button 
-                                      onClick={(e) => { e.stopPropagation(); handleDeleteUser(user.id); }}
-                                      className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg border border-red-500/30 transition-colors flex items-center gap-1"
-                                      title="Delete User"
-                                  >
-                                     <Trash2 size={12} /> Delete
-                                  </button>
-                               </div>
+                               <UserActionsMenu 
+                                  user={user} 
+                                  onStatusChange={handleStatusChange}
+                                  onVerificationChange={handleVerificationStatusChange}
+                                  onEdit={() => { setShowAddUserModal(true); setEditingUser(user); }}
+                                  onDelete={handleDeleteUser}
+                               />
                             </td>
                          </tr>
                       ))
@@ -257,8 +299,17 @@ export default function ManageUsers() {
                       <tr>
                          <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
                             <div className="flex flex-col items-center gap-2">
-                               <Search size={32} className="text-slate-400" />
-                               <p>No {activeTab.toLowerCase()}s found matching your filters.</p>
+                               {isLoading ? (
+                                  <>
+                                     <div className="w-8 h-8 border-3 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-400 rounded-full animate-spin" />
+                                     <p>Loading {activeTab.toLowerCase()}s...</p>
+                                  </>
+                               ) : (
+                                  <>
+                                     <Search size={32} className="text-slate-400" />
+                                     <p>No {activeTab.toLowerCase()}s found matching your filters.</p>
+                                  </>
+                               )}
                             </div>
                          </td>
                       </tr>
@@ -721,6 +772,154 @@ function UserFormModal({ onClose, onSubmit, initialData, isSubmitting }) {
     );
 }
 
+function UserActionsMenu({ user, onStatusChange, onVerificationChange, onEdit, onDelete }) {
+   const [showMenu, setShowMenu] = useState(false);
+   const menuRef = React.useRef(null);
+
+   const statusOptions = [
+      { label: 'Verified', color: 'emerald', icon: '✓' },
+      { label: 'Pending', color: 'amber', icon: '⏳' },
+      { label: 'Rejected', color: 'red', icon: '✕' },
+      { label: 'Blocked', color: 'rose', icon: '⛔' }
+   ];
+   
+   const verificationOptions = [
+      { label: 'verified', color: 'blue', icon: '✓' },
+      { label: 'pending', color: 'cyan', icon: '⏳' },
+      { label: 'rejected', color: 'orange', icon: '✕' }
+   ];
+
+   // Close menu when clicking outside
+   React.useEffect(() => {
+      const handleClickOutside = (e) => {
+         if (menuRef.current && !menuRef.current.contains(e.target)) {
+            setShowMenu(false);
+         }
+      };
+      if (showMenu) {
+         document.addEventListener('mousedown', handleClickOutside);
+         return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+   }, [showMenu]);
+
+   const handleStatusSelect = (status) => {
+      onStatusChange(user.id, status, user.name);
+      setShowMenu(false);
+   };
+
+   const handleVerificationSelect = (status) => {
+      onVerificationChange(user.id, status);
+      setShowMenu(false);
+   };
+
+   const getStatusColor = (status) => {
+      const option = statusOptions.find(opt => opt.label === status);
+      return option?.color || 'slate';
+   };
+
+   const getVerificationColor = (status) => {
+      const option = verificationOptions.find(opt => opt.label === status);
+      return option?.color || 'slate';
+   };
+
+   return (
+      <div className="relative inline-block w-full" ref={menuRef}>
+         <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-300 dark:border-slate-600 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 group"
+            title="User actions menu"
+         >
+            <MoreVertical size={16} className="group-hover:text-slate-900 dark:group-hover:text-white transition-colors" />
+            <span className="hidden sm:inline">Actions</span>
+            <ChevronDown size={16} className={`transition-transform duration-200 ${showMenu ? 'rotate-180' : ''}`} />
+         </button>
+
+         {showMenu && (
+            <div className="absolute top-full mt-2 right-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 w-72 overflow-hidden animate-in fade-in slide-in-from-top-2">
+               
+               {/* User Info Header */}
+               <div className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">Manage</p>
+               </div>
+
+               {/* Status Section */}
+               <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-2 mb-3">
+                     <CheckCircle2 size={14} className="text-slate-500 dark:text-slate-400" />
+                     <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                     {statusOptions.map(option => {
+                        const isActive = user.status === option.label;
+                        return (
+                           <button
+                              key={option.label}
+                              onClick={() => handleStatusSelect(option.label)}
+                              className={`px-3 py-2.5 rounded-lg text-xs font-semibold capitalize transition-all transform hover:scale-105 active:scale-95 ${
+                                 isActive
+                                    ? `bg-${option.color}-500 dark:bg-${option.color}-600 text-white shadow-lg border-2 border-${option.color}-600 dark:border-${option.color}-500`
+                                    : `bg-${option.color}-50 dark:bg-${option.color}-900/20 text-${option.color}-700 dark:text-${option.color}-300 border-2 border-${option.color}-200 dark:border-${option.color}-700 hover:bg-${option.color}-100 dark:hover:bg-${option.color}-900/40`
+                              }`}
+                           >
+                              <span className="inline-block mr-1">{option.icon}</span>
+                              {option.label}
+                           </button>
+                        );
+                     })}
+                  </div>
+               </div>
+
+               {/* Verification Section */}
+               <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-2 mb-3">
+                     <ShieldCheck size={14} className="text-slate-500 dark:text-slate-400" />
+                     <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Verification</p>
+                  </div>
+                  <div className="space-y-2">
+                     {verificationOptions.map(option => {
+                        const isActive = user.verificationStatus === option.label;
+                        return (
+                           <button
+                              key={option.label}
+                              onClick={() => handleVerificationSelect(option.label)}
+                              className={`w-full px-3 py-2.5 rounded-lg text-xs font-semibold capitalize transition-all flex items-center gap-2 ${
+                                 isActive
+                                    ? `bg-${option.color}-500 dark:bg-${option.color}-600 text-white shadow-md border-2 border-${option.color}-600 dark:border-${option.color}-500`
+                                    : `bg-${option.color}-50 dark:bg-${option.color}-900/20 text-${option.color}-700 dark:text-${option.color}-300 border-2 border-${option.color}-200 dark:border-${option.color}-700 hover:bg-${option.color}-100 dark:hover:bg-${option.color}-900/40`
+                              }`}
+                           >
+                              <span>{option.icon}</span>
+                              {option.label}
+                              {isActive && <Check size={14} className="ml-auto" />}
+                           </button>
+                        );
+                     })}
+                  </div>
+               </div>
+
+               {/* Actions Section */}
+               <div className="p-4 bg-slate-50 dark:bg-slate-900/30 space-y-2">
+                  <button
+                     onClick={() => { onEdit(); setShowMenu(false); }}
+                     className="w-full px-3 py-2.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-2 border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all flex items-center justify-center gap-2 hover:shadow-md"
+                  >
+                     <Edit2 size={14} />
+                     Edit User
+                  </button>
+                  <button
+                     onClick={() => { onDelete(); setShowMenu(false); }}
+                     className="w-full px-3 py-2.5 rounded-lg text-xs font-semibold bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-2 border-red-200 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2 hover:shadow-md"
+                  >
+                     <Trash2 size={14} />
+                     Delete User
+                  </button>
+               </div>
+            </div>
+         )}
+      </div>
+   );
+}
+
 function StatusIndicator({ status }) {
    const config = {
       Verified: { color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-400/10', border: 'border-emerald-200 dark:border-emerald-400/20', icon: ShieldCheck },
@@ -736,6 +935,33 @@ function StatusIndicator({ status }) {
       <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${color} ${bg} ${border}`}>
          <Icon size={12} />
          <span>{status}</span>
+      </div>
+   );
+}
+
+function VerificationBadge({ status, isVerified }) {
+   if (isVerified) {
+      return (
+         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-400/10 border-green-200 dark:border-green-400/20">
+            <CheckCircle2 size={12} />
+            <span>Verified</span>
+         </div>
+      );
+   }
+
+   if (status === 'pending') {
+      return (
+         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-400/10 border-amber-200 dark:border-amber-400/20">
+            <Clock size={12} />
+            <span>Pending</span>
+         </div>
+      );
+   }
+
+   return (
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-400/10 border-slate-200 dark:border-slate-400/20">
+         <AlertTriangle size={12} />
+         <span>Unverified</span>
       </div>
    );
 }

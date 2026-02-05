@@ -1,10 +1,28 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { BarChart, BadgeDollarSign, TrendingUp, Calendar, ArrowUpRight, Zap, Globe, ShieldCheck, Activity } from 'lucide-react';
 
 export default function Analytics() {
-  const { transactions, user,listings } = useApp();
+   const { transactions, user, listings, fetchTransactions, fetchListings } = useApp();
+   const [loading, setLoading] = useState(false);
 
+   useEffect(() => {
+      const loadData = async () => {
+         // Only show loader if no cached data
+         if (transactions.length === 0 && listings.length === 0) setLoading(true);
+         
+         try {
+            await Promise.all([fetchTransactions(), fetchListings()]);
+         } catch (error) {
+            console.error('Failed to load analytics data:', error);
+         } finally {
+            setLoading(false);
+         }
+      };
+      loadData();
+   }, [fetchTransactions, fetchListings]);
+
+  // All hooks must be called before conditional logic
   // 1. Core Data Filtration
   const myTransactions = useMemo(() => 
     transactions.filter(t => t.sellerId === user?.id), 
@@ -68,6 +86,13 @@ export default function Analytics() {
         .slice(0, 4); // Top 4
   }, [mySoldListings]);
 
+   if (loading) {
+      return (
+         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+         </div>
+      );
+   }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -135,9 +160,9 @@ export default function Analytics() {
                         </div>
                         <div 
                            style={{ height: `${Math.max(heightPercent, 2)}%` }} 
-                           className="w-full bg-linear-to-t from-blue-600/10 to-blue-500 dark:from-blue-500/20 dark:to-blue-400 rounded-2xl group-hover:to-emerald-400 transition-all duration-700 relative min-h-[10px]"
+                           className="w-full bg-linear-to-t from-blue-600/10 to-blue-500 dark:from-blue-500/20 dark:to-blue-400 rounded-2xl group-hover:to-emerald-400 transition-all duration-700 relative min-h-2.5"
                         >
-                           <div className="absolute top-0 w-full h-[6px] bg-white/20 dark:bg-blue-300/30 rounded-full blur-[2px]"></div>
+                           <div className="absolute top-0 w-full h-1.5 bg-white/20 dark:bg-blue-300/30 rounded-full blur-[2px]"></div>
                         </div>
                      </div>
                      <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{data.month}</span>

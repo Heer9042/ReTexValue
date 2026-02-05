@@ -6,6 +6,33 @@ import blendedImg from '../assets/blended_fabric.png';
 
 const AppContext = createContext();
 
+const mapUserData = (u) => ({
+  id: u.id,
+  name: u.full_name || u.username || 'Unknown',
+  email: u.email,
+  role: u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : 'Buyer',
+  status: u.status || 'Pending',
+  joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+  location: u.location || 'N/A',
+  phone: u.phone || 'N/A',
+  type: u.type || 'Standard',
+  companyName: u.company_name || '',
+  address: u.address || '',
+  gst: u.gst || '',
+  capacity: u.capacity || 0,
+  // Verification fields
+  isVerified: u.is_verified || false,
+  verificationStatus: u.verification_status || 'unverified',
+  verificationDocuments: u.verification_documents || null,
+  verifiedAt: u.verified_at || null,
+  averageRating: u.average_rating || 0,
+  totalReviews: u.total_reviews || 0,
+  totalTransactions: u.total_transactions || 0,
+  bio: u.bio || '',
+  linkedinUrl: u.linkedin_url || '',
+  websiteUrl: u.website_url || ''
+});
+
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
@@ -18,35 +45,43 @@ export const AppProvider = ({ children }) => {
   const [loading, setLoading] = useState(!user); // Only loading if no cached user
   const [users, setUsers] = useState(() => {
     try {
-      const saved = localStorage.getItem('retex_cache_users');
-      return saved ? JSON.parse(saved) : [];
+      const cached = sessionStorage.getItem('retex_cache_users');
+      return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
   const [listings, setListings] = useState(() => {
     try {
-      const saved = localStorage.getItem('retex_cache_listings');
-      return saved ? JSON.parse(saved) : [];
+      const cached = sessionStorage.getItem('retex_cache_listings');
+      return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
   const [transactions, setTransactions] = useState(() => {
     try {
-      const saved = localStorage.getItem('retex_cache_transactions');
-      return saved ? JSON.parse(saved) : [];
+      const cached = sessionStorage.getItem('retex_cache_transactions');
+      return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
   const [bulkRequests, setBulkRequests] = useState(() => {
     try {
-      const saved = localStorage.getItem('retex_cache_bulk');
-      return saved ? JSON.parse(saved) : [];
+      const cached = sessionStorage.getItem('retex_cache_bulkRequests');
+      return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
   const [proposals, setProposals] = useState(() => {
     try {
-      const saved = localStorage.getItem('retex_cache_proposals');
-      return saved ? JSON.parse(saved) : [];
+      const cached = sessionStorage.getItem('retex_cache_proposals');
+      return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
-  const [reports, setReports] = useState([]);
+  const [reports, setReports] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('retex_cache_reports');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [realtimeInitialized, setRealtimeInitialized] = useState(false);
+  const initialDataFetchedRef = React.useRef(false);
+  const authInitializedRef = React.useRef(false);
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('retex_cache_settings');
@@ -87,7 +122,7 @@ export const AppProvider = ({ children }) => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const fetchBulkRequests = async () => {
+  const fetchBulkRequests = React.useCallback(async () => {
       try {
           const { data, error } = await supabase
             .from('bulk_requests')
@@ -111,14 +146,15 @@ export const AppProvider = ({ children }) => {
                   created_at: r.created_at
               }));
               setBulkRequests(mappedRequests);
-              localStorage.setItem('retex_cache_bulk', JSON.stringify(mappedRequests));
+              sessionStorage.setItem('retex_cache_bulkRequests', JSON.stringify(mappedRequests));
+              
           }
       } catch (error) {
           console.error("Failed to fetch bulk requests:", error.message);
       }
-  };
+        }, []);
 
-  const fetchSettings = async () => {
+  const fetchSettings = React.useCallback(async () => {
       try {
           const { data, error } = await supabase
             .from('settings')
@@ -142,7 +178,7 @@ export const AppProvider = ({ children }) => {
           console.error("Failed to fetch settings:", error.message);
           setSettings({ platformFee: 1.5, maintenanceMode: false, categories: [] });
       }
-  };
+      }, []);
 
   const updateSettings = async (newSettings) => {
       try {
@@ -161,8 +197,159 @@ export const AppProvider = ({ children }) => {
       }
   };
 
-  const fetchUsers = async () => {
+  const setupRealtimeSubscription = React.useCallback(() => {
+    // Subscribe to profiles changes
+    const profilesSubscription = supabase
+      .channel('profiles-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload) => {
+          console.log('🔄 [RealtimeListener] Profile changed:', payload.eventType, payload.new?.id || payload.old?.id);
+          
+          if (payload.eventType === 'UPDATE') {
+            setUsers(prevUsers => 
+              prevUsers.map(u => u.id === payload.new.id ? mapUserData(payload.new) : u)
+            );
+            console.log('✅ [RealtimeListener] UI updated with latest changes');
+          } else if (payload.eventType === 'INSERT') {
+            setUsers(prevUsers => [mapUserData(payload.new), ...prevUsers]);
+            console.log('✅ [RealtimeListener] New user added');
+          } else if (payload.eventType === 'DELETE') {
+            setUsers(prevUsers => prevUsers.filter(u => u.id !== payload.old.id));
+            console.log('✅ [RealtimeListener] User deleted');
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to listings changes
+    const listingsSubscription = supabase
+      .channel('listings-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'listings' },
+        (payload) => {
+          console.log('🔄 [RealtimeListener] Listing changed:', payload.eventType);
+
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const listing = payload.new;
+            let displayImage = listing.image_url;
+            if (!displayImage || displayImage === 'null') {
+              const type = (listing.fabric_type || '').toLowerCase();
+              if (type.includes('cotton')) displayImage = cottonImg;
+              else if (type.includes('poly')) displayImage = polyesterImg;
+              else displayImage = blendedImg;
+            }
+
+            const mappedListing = {
+              id: listing.id,
+              factoryId: listing.factory_id || 'factory_unknown',
+              imageUrl: displayImage,
+              fabricType: listing.fabric_type || 'Unknown',
+              fabricCategory: listing.fabric_category || 'Other',
+              shopName: listing.shop_name || 'Unknown',
+              contact: listing.contact || 'N/A',
+              email: listing.email || 'N/A',
+              quantity: listing.quantity || 0,
+              price: listing.price || 0,
+              location: listing.location || 'N/A',
+              date: listing.created_at ? new Date(listing.created_at).toISOString().split('T')[0] : 'N/A',
+              status: listing.status || 'Pending',
+              aiConfidence: listing.ai_confidence || 0,
+              description: listing.description
+            };
+
+            if (payload.eventType === 'UPDATE') {
+              setListings(prevListings => 
+                prevListings.map(l => l.id === listing.id ? mappedListing : l)
+              );
+            } else if (payload.eventType === 'INSERT') {
+              setListings(prevListings => [mappedListing, ...prevListings]);
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setListings(prevListings => prevListings.filter(l => l.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to bulk_requests changes
+    const bulkRequestsSubscription = supabase
+      .channel('bulk-requests-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'bulk_requests' },
+        (payload) => {
+          console.log('🔄 [RealtimeListener] Bulk request changed:', payload.eventType);
+
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const mappedRequest = {
+              id: payload.new.id,
+              fabricCategory: payload.new.fabric_category || 'Other',
+              fabricType: payload.new.fabric_type || 'Unknown',
+              quantity: payload.new.quantity,
+              targetPrice: payload.new.target_price,
+              deadline: payload.new.deadline,
+              description: payload.new.description,
+              buyerName: payload.new.buyer_id ? `Buyer ${payload.new.buyer_id.slice(0,4)}` : 'Guest Buyer',
+              status: payload.new.status,
+              buyerId: payload.new.buyer_id,
+              created_at: payload.new.created_at
+            };
+
+            if (payload.eventType === 'UPDATE') {
+              setBulkRequests(prev => prev.map(r => r.id === payload.new.id ? mappedRequest : r));
+            } else if (payload.eventType === 'INSERT') {
+              setBulkRequests(prev => [mappedRequest, ...prev]);
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setBulkRequests(prev => prev.filter(r => r.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to transactions changes
+    const transactionsSubscription = supabase
+      .channel('transactions-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload) => {
+          console.log('🔄 [RealtimeListener] Transaction changed:', payload.eventType);
+
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const mappedTransaction = {
+              id: payload.new.id,
+              listingId: payload.new.listing_id,
+              buyerId: payload.new.buyer_id,
+              sellerId: payload.new.seller_id,
+              amount: payload.new.amount,
+              commission: payload.new.commission || (payload.new.amount * (settings?.platformFee || 5) / 100),
+              date: payload.new.created_at ? new Date(payload.new.created_at).toISOString().split('T')[0] : 'N/A',
+              status: payload.new.status || 'Completed'
+            };
+
+            if (payload.eventType === 'UPDATE') {
+              setTransactions(prev => prev.map(t => t.id === payload.new.id ? mappedTransaction : t));
+            } else if (payload.eventType === 'INSERT') {
+              setTransactions(prev => [mappedTransaction, ...prev]);
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setTransactions(prev => prev.filter(t => t.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      profilesSubscription.unsubscribe();
+      listingsSubscription.unsubscribe();
+      bulkRequestsSubscription.unsubscribe();
+      transactionsSubscription.unsubscribe();
+    };
+  }, [settings]);
+
+  const fetchUsers = React.useCallback(async () => {
     try {
+      console.log('🔄 [AppContext] Fetching users from profiles table...');
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -171,38 +358,62 @@ export const AppProvider = ({ children }) => {
       if (error) throw error;
 
       if (data) {
-        const mappedUsers = data.map(u => ({
-          id: u.id,
-          name: u.full_name || u.username || 'Unknown',
-          email: u.email,
-          role: u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : 'Buyer',
-          status: u.status || 'Pending',
-          joinDate: u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          location: u.location || 'N/A',
-          phone: u.phone || 'N/A',
-          type: u.type || 'Standard',
-          companyName: u.company_name || '',
-          address: u.address || '',
-          gst: u.gst || '',
-          capacity: u.capacity || 0
-        }));
+        console.log(`✅ [AppContext] Fetched ${data.length} users from database`);
+        const mappedUsers = data.map(mapUserData);
         setUsers(mappedUsers);
-        localStorage.setItem('retex_cache_users', JSON.stringify(mappedUsers));
+        sessionStorage.setItem('retex_cache_users', JSON.stringify(mappedUsers));
+        console.log('✅ [AppContext] Users loaded into state');
+        
+        // Setup real-time listener only once
+        if (!realtimeInitialized) {
+          setupRealtimeSubscription();
+          setRealtimeInitialized(true);
+        }
       }
     } catch (error) {
-      console.error("Failed to fetch users:", error.message);
+      console.error("❌ [AppContext] Failed to fetch users:", error.message);
     }
-  };
+  }, [realtimeInitialized, setupRealtimeSubscription]);
 
-  const fetchReports = async () => {
+  const fetchCommunityMembers = React.useCallback(async () => {
+    console.log('🔄 [fetchCommunityMembers] Starting to fetch community members from profiles...');
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('role', ['buyer', 'factory'])
+        .order('average_rating', { ascending: false });
+
+      console.log('📊 [fetchCommunityMembers] Supabase response:', { dataCount: data?.length, error });
+
+      if (error) {
+        console.error('❌ [fetchCommunityMembers] Supabase error:', error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        console.log(`✅ [fetchCommunityMembers] Fetched ${data.length} community members from profiles table`);
+        const mappedMembers = data.map(mapUserData);
+        setUsers(mappedMembers);
+        sessionStorage.setItem('retex_cache_users', JSON.stringify(mappedMembers));
+      } else {
+        console.warn('⚠️ [fetchCommunityMembers] No community members returned. Keeping existing users in state.');
+      }
+    } catch (error) {
+      console.error('❌ [fetchCommunityMembers] Failed to fetch community members:', error.message);
+    }
+  }, []);
+
+  const fetchReports = React.useCallback(async () => {
     try {
         const { data, error } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
         if(error) throw error;
         setReports(data);
+        sessionStorage.setItem('retex_cache_reports', JSON.stringify(data));
     } catch (error) {
         console.error("Failed to fetch reports:", error.message);
     }
-  };
+  }, []);
   
   const generateReport = async (name, type) => {
       try {
@@ -220,7 +431,7 @@ export const AppProvider = ({ children }) => {
       }
   };
   
-  const fetchListings = async () => {
+  const fetchListings = React.useCallback(async () => {
       try {
         const { data, error } = await supabase
             .from('listings')
@@ -258,14 +469,14 @@ export const AppProvider = ({ children }) => {
                 };
             });
             setListings(mappedListings);
-            localStorage.setItem('retex_cache_listings', JSON.stringify(mappedListings));
+            sessionStorage.setItem('retex_cache_listings', JSON.stringify(mappedListings));
         }
       } catch (error) {
           console.error("Failed to fetch listings:", error.message);
       }
-  };
+  }, []);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = React.useCallback(async () => {
       try {
         const { data, error } = await supabase
             .from('transactions')
@@ -286,12 +497,13 @@ export const AppProvider = ({ children }) => {
                 status: t.status || 'Completed'
             }));
             setTransactions(mappedTransactions);
-            localStorage.setItem('retex_cache_transactions', JSON.stringify(mappedTransactions));
+            sessionStorage.setItem('retex_cache_transactions', JSON.stringify(mappedTransactions));
+            
         }
       } catch (error) {
           console.error("Failed to fetch transactions:", error.message);
       }
-  };
+  }, [settings]);
 
   const addUser = async (userData) => {
       try {
@@ -307,7 +519,7 @@ export const AppProvider = ({ children }) => {
 
           setUsers(prev => {
               const updated = [newUser, ...prev];
-              localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+              
               return updated;
           });
           
@@ -357,7 +569,7 @@ export const AppProvider = ({ children }) => {
 
           setUsers(prev => {
               const updated = prev.filter(u => u.id !== id);
-              localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+              
               return updated;
           });
           
@@ -371,29 +583,41 @@ export const AppProvider = ({ children }) => {
 
   const updateUserStatus = async (id, status, userName) => {
       try {
+          console.log(`🔄 [updateUserStatus] Updating user ${id} status to ${status}`);
           const isRealUser = typeof id === 'string' && id.includes('-');
           
-          if (isRealUser) {
-             const { error } = await supabase
-              .from('profiles')
-               .update({ status })
-              .eq('id', id);
-
-             if (error) throw error;
-          }
+          // Optimistic update - Update UI immediately for better UX
+          setUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u));
+          console.log('✅ [updateUserStatus] Optimistic UI update applied');
           
-          setUsers(prev => {
-              const updated = prev.map(u => u.id === id ? { ...u, status } : u);
-              localStorage.setItem('retex_cache_users', JSON.stringify(updated));
-              return updated;
-          });
+          if (isRealUser) {
+             console.log('📤 [updateUserStatus] Sending to Supabase:', { id, status });
+             const { data, error } = await supabase
+              .from('profiles')
+               .update({ status: status })
+              .eq('id', id)
+              .select();
 
+             if (error) {
+               console.error('❌ [updateUserStatus] Supabase update error:', error);
+               console.error('❌ [updateUserStatus] Error details:', JSON.stringify(error, null, 2));
+               // Revert optimistic update on error
+               await fetchUsers();
+               throw error;
+             }
+             console.log('✅ [updateUserStatus] Supabase update successful:', data);
+          }
+
+          // Log action if function available
           if (typeof logApprovalAction === 'function') {
               logApprovalAction(status, userName); 
           }
+          
+          console.log(`✅ [updateUserStatus] Status updated to ${status}`);
       } catch (error) {
-          console.error("❌ [UserMgmt] Failed to update user status:", error.message);
-          alert(`Error updating status: ${error.message}`);
+          console.error("❌ [updateUserStatus] Failed to update user status:", error.message);
+          console.error("❌ [updateUserStatus] Full error:", error);
+          throw error;
       }
   };
 
@@ -438,7 +662,7 @@ export const AppProvider = ({ children }) => {
 
       setUsers(prev => {
         const updated = prev.map(u => u.id === id ? { ...u, ...updates } : u);
-        localStorage.setItem('retex_cache_users', JSON.stringify(updated));
+        
         return updated;
       });
 
@@ -510,7 +734,7 @@ export const AppProvider = ({ children }) => {
           
           setListings(prev => {
               const updated = prev.map(l => l.id === id ? { ...l, ...updates } : l);
-              localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+              
               return updated;
           });
           alert("Listing updated successfully");
@@ -526,7 +750,7 @@ export const AppProvider = ({ children }) => {
           if (typeof id === 'string' && id.startsWith('mock')) {
               setListings(prev => {
                   const updated = prev.filter(l => l.id !== id);
-                  localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+                  
                   return updated;
               });
               return true;
@@ -544,7 +768,7 @@ export const AppProvider = ({ children }) => {
           
           setListings(prev => {
               const updated = prev.filter(l => l.id !== id);
-              localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+              
               return updated;
           });
           return true;
@@ -554,7 +778,7 @@ export const AppProvider = ({ children }) => {
       }
   };
 
-  const fetchProposals = async () => {
+  const fetchProposals = React.useCallback(async () => {
     try {
         const { data, error } = await supabase
             .from('proposals')
@@ -582,28 +806,100 @@ export const AppProvider = ({ children }) => {
                 date: new Date(p.created_at).toISOString().split('T')[0]
             }));
             setProposals(mappedProposals);
-            localStorage.setItem('retex_cache_proposals', JSON.stringify(mappedProposals));
+            sessionStorage.setItem('retex_cache_proposals', JSON.stringify(mappedProposals));
+            
         }
     } catch (error) {
         console.error("Failed to fetch proposals:", error.message);
     }
-  };
+  }, []);
+
+  const fetchPackages = React.useCallback(async () => {
+    console.log('🔄 [fetchPackages] Starting to fetch packages...');
+    try {
+      const { data, error } = await supabase
+        .from('packages')
+        .select('*')
+        .order('price', { ascending: true });
+
+      console.log('📊 [fetchPackages] Supabase response:', { data, error });
+
+      if (error) {
+        console.error('❌ [fetchPackages] Supabase error:', error);
+        throw error;
+      }
+
+      if (data) {
+        console.log(`✅ [fetchPackages] Fetched ${data.length} packages from Supabase`);
+        const mappedPackages = data.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          price: p.price,
+          durationDays: p.duration_days,
+          features: p.features || [],
+          maxListings: p.max_listings,
+          maxBulkRequests: p.max_bulk_requests,
+          prioritySupport: p.priority_support,
+          aiCredits: p.ai_credits,
+          status: p.status,
+          badgeColor: p.badge_color,
+          isFeatured: p.is_featured,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at
+        }));
+        console.log('📦 [fetchPackages] Mapped packages:', mappedPackages);
+        setPackages(mappedPackages);
+        sessionStorage.setItem('retex_cache_packages', JSON.stringify(mappedPackages));
+      } else {
+        console.warn('⚠️ [fetchPackages] No data returned from Supabase');
+      }
+    } catch (error) {
+      console.error('❌ [fetchPackages] Failed to fetch packages:', error.message);
+      console.error('❌ [fetchPackages] Full error:', error);
+    }
+  }, []);
 
   const fetchInitialData = React.useCallback(async () => {
     console.log("🔄 [Backend] Initializing data fetch...");
-    await Promise.allSettled([
-        fetchUsers(),
-        fetchListings(),
-        fetchTransactions(),
-        fetchReports(),
-        fetchBulkRequests(),
-        fetchProposals(),
-        fetchSettings(),
-        fetchPackages()
-    ]);
-  }, []);
+    setLoading(true);
+    try {
+      await Promise.allSettled([
+          fetchUsers(),
+          fetchListings(),
+          fetchTransactions(),
+          fetchReports(),
+          fetchBulkRequests(),
+          fetchProposals(),
+          fetchSettings(),
+          fetchPackages()
+      ]);
+    } finally {
+      setLoading(false);
+      console.log("✅ [Backend] Initial data fetch complete");
+    }
+  }, [
+    fetchUsers,
+    fetchListings,
+    fetchTransactions,
+    fetchReports,
+    fetchBulkRequests,
+    fetchProposals,
+    fetchSettings,
+    fetchPackages
+  ]);
+
+  const runInitialFetchOnce = React.useCallback(async () => {
+    if (initialDataFetchedRef.current) return;
+    initialDataFetchedRef.current = true;
+    await fetchInitialData();
+  }, [fetchInitialData]);
 
   useEffect(() => {
+    // Only run this initialization once per component mount
+    if (authInitializedRef.current) return;
+    authInitializedRef.current = true;
+    
     // 1. Core Auth & Session Strategy
     const initializeAuth = async () => {
       try {
@@ -630,7 +926,7 @@ export const AppProvider = ({ children }) => {
                   localStorage.setItem('retex_user', JSON.stringify(userData));
                   localStorage.setItem('userRole', profile.role);
                   localStorage.removeItem('mockUser'); // Ensure real session takes over
-                  fetchInitialData();
+                    runInitialFetchOnce();
               }
           } else {
               // 🛡️ Final Verification: If no session and NOT a mock, clear everything
@@ -652,10 +948,12 @@ export const AppProvider = ({ children }) => {
       }
     };
 
-    // 2. Fast-Path Data Fetch (Run immediately if we have a cached user)
-    if (user) {
+    // 2. Fast-Path Data Fetch (Run immediately if we have a cached user in localStorage)
+    const cachedUser = localStorage.getItem('retex_user');
+    if (cachedUser) {
       console.log("⚡ [Init] Found cached user, starting fast-path fetch...");
-      fetchInitialData();
+      setLoading(true);
+      runInitialFetchOnce();
     }
 
     initializeAuth();
@@ -682,12 +980,14 @@ export const AppProvider = ({ children }) => {
             setUser(userData);
             localStorage.setItem('retex_user', JSON.stringify(userData));
             localStorage.setItem('userRole', profile.role); 
-            fetchInitialData();
+            runInitialFetchOnce();
           }
       } else if (event === 'SIGNED_OUT') {
         console.log("🚪 [Auth] User signed out, clearing all session data.");
         setUser(null);
         setLoading(false);
+        initialDataFetchedRef.current = false;
+        authInitializedRef.current = false;
         const keysToClear = [
           'retex_user', 'userRole', 'mockUser', 
           'retex_cache_users', 'retex_cache_listings', 
@@ -702,11 +1002,11 @@ export const AppProvider = ({ children }) => {
     return () => {
       if (authListener?.subscription) authListener.subscription.unsubscribe();
     };
-  }, [fetchInitialData]);
+  }, []);
 
   // Remove the duplicate fetch-on-user-id effect to prevent race conditions
 
-  const login = async (role, credentials) => {
+  const login = async (role) => {
     if (typeof role === 'object') {
         setUser(role);
         localStorage.setItem('retex_user', JSON.stringify(role));
@@ -728,19 +1028,36 @@ export const AppProvider = ({ children }) => {
       // 1. Immediately wipe local state for instant UI response
       setUser(null);
       setLoading(false);
+      setUsers([]);
+      setListings([]);
+      setTransactions([]);
+      setBulkRequests([]);
+      setProposals([]);
+      setReports([]);
+      setSettings(null);
+      setPackages([]);
+      setRealtimeInitialized(false);
+      
+      // Reset refs
+      initialDataFetchedRef.current = false;
+      authInitializedRef.current = false;
+      
+      // 2. Clear all storage
       sessionStorage.clear();
       
       const keysToClear = [
         'retex_user', 'userRole', 'mockUser', 
         'retex_cache_users', 'retex_cache_listings', 
-        'retex_cache_transactions', 'retex_cache_bulk', 
-        'retex_cache_proposals', 'retex_cache_settings',
-        'sb-hinwjdamhyybmolddkge-auth-token'
+        'retex_cache_transactions', 'retex_cache_bulkRequests',
+        'retex_cache_proposals', 'retex_cache_reports',
+        'retex_cache_settings', 'retex_cache_packages',
+        'sb-hinwjdamhyybmolddkge-auth-token',
+        'theme' // Clear theme preference
       ];
       
       keysToClear.forEach(k => localStorage.removeItem(k));
 
-      // 2. Perform background signout
+      // 3. Perform background signout
       try {
           await supabase.auth.signOut();
           console.log("✅ [Auth] Supabase session terminated.");
@@ -753,40 +1070,54 @@ export const AppProvider = ({ children }) => {
 
 
 
-  const purchaseListing = async (listing) => {
+  const purchaseListing = async (listing, paymentResult = null) => {
     try {
         const amount = listing.quantity * listing.price;
         const commission = amount * (settings?.platformFee || 5) / 100;
         const buyerId = user?.id;
 
-        if(!buyerId) return;
+        console.log("🔄 [purchaseListing] Starting purchase process", { listingId: listing.id, buyerId, amount, paymentId: paymentResult?.paymentId });
+
+        if(!buyerId) {
+            console.error("❌ [purchaseListing] No buyer ID found");
+            throw new Error("User not authenticated");
+        }
 
         // Mock Transaction
         if (buyerId === 'mock') {
+            console.log("🎭 [purchaseListing] Mock transaction for testing");
             const newTxn = {
                 id: `mock_txn_${Date.now()}`,
                 listingId: listing.id,
                 buyerId: 'mock',
                 amount,
                 commission,
+                paymentId: paymentResult?.paymentId || null,
                 date: new Date().toISOString().split('T')[0],
                 status: 'Completed'
             };
             setTransactions([newTxn, ...transactions]);
             setListings(listings.map(l => l.id === listing.id ? { ...l, status: 'Sold' } : l));
+            console.log("✅ [purchaseListing] Mock transaction completed");
             return;
         }
 
+        console.log("📡 [purchaseListing] Inserting transaction into database");
         const { data, error } = await supabase.from('transactions').insert([{
              listing_id: listing.id,
              buyer_id: buyerId,
              amount,
              commission,
+             payment_id: paymentResult?.paymentId || null,
              status: 'Completed'
         }]).select().single();
 
-        if (error) throw error;
-        
+        if (error) {
+            console.error("❌ [purchaseListing] Database insert error:", error);
+            throw error;
+        }
+
+        console.log("✅ [purchaseListing] Transaction inserted, updating listing status");
         await updateListingStatus(listing.id, 'Sold');
 
         if(data) {
@@ -796,13 +1127,17 @@ export const AppProvider = ({ children }) => {
                 buyerId,
                 amount,
                 commission,
+                paymentId: data.payment_id,
                 date: new Date().toISOString().split('T')[0],
                 status: 'Completed'
             };
             setTransactions([newTxn, ...transactions]);
+            console.log("✅ [purchaseListing] Purchase process completed successfully");
         }
     } catch (error) {
-        console.error("Failed to purchase listing:", error.message);
+        console.error("❌ [purchaseListing] Failed to purchase listing:", error.message);
+        // Don't rethrow - let the UI handle it gracefully
+        alert("Purchase failed: " + error.message);
     }
   };
 
@@ -906,6 +1241,7 @@ export const AppProvider = ({ children }) => {
         fetchProposals(); 
     } catch (error) {
          console.error("Failed to submit proposal:", error.message);
+         throw error;
     }
   };
 
@@ -1113,7 +1449,7 @@ export const AppProvider = ({ children }) => {
             };
             setListings(prev => {
                 const updated = [newListing, ...prev];
-                localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+                
                 return updated;
             });
             return newListing;
@@ -1154,7 +1490,7 @@ export const AppProvider = ({ children }) => {
             };
             setListings(prev => {
                 const updated = [newListing, ...prev];
-                localStorage.setItem('retex_cache_listings', JSON.stringify(updated));
+                
                 return updated;
             });
         }
@@ -1198,7 +1534,7 @@ export const AppProvider = ({ children }) => {
                     contentType: file.type 
                 });
 
-            const { data, error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
+            const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
 
             if (uploadError) {
                 console.warn("⚠️ [Storage] Supabase Upload failed. Falling back to local persistence.", uploadError);
@@ -1239,13 +1575,20 @@ export const AppProvider = ({ children }) => {
 
   const initiatePayment = async (amount, metadata = {}) => {
     return new Promise((resolve, reject) => {
+      const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+
       if (!window.Razorpay) {
         alert("Razorpay SDK failed to load. Please check your internet connection.");
         return reject(new Error("Razorpay SDK not loaded"));
       }
 
+      if (!razorpayKey || razorpayKey === 'your_razorpay_key_id') {
+        alert("Razorpay payment key not configured. Please set VITE_RAZORPAY_KEY_ID in your .env file.");
+        return reject(new Error("Razorpay key not configured"));
+      }
+
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_demo_key', // Replace with real key in .env
+        key: razorpayKey,
         amount: Math.round(amount * 100), // convert to paise
         currency: "INR",
         name: "ReTexValue",
@@ -1253,7 +1596,7 @@ export const AppProvider = ({ children }) => {
         // Removed image: "/logo.png" - causes CORS issues from localhost
         // If you need a logo, host it on a public CDN or use Razorpay's merchant logo settings
         handler: function (response) {
-          console.log("Payment Successful:", response);
+          console.log("✅ [initiatePayment] Payment Successful:", response);
           resolve({
             success: true,
             paymentId: response.razorpay_payment_id,
@@ -1274,68 +1617,53 @@ export const AppProvider = ({ children }) => {
         },
         modal: {
           ondismiss: function() {
+            console.log("❌ [initiatePayment] Payment cancelled by user");
             reject(new Error("Payment cancelled"));
           }
         }
       };
 
       try {
+        console.log("💳 [initiatePayment] Opening Razorpay modal");
         const rzp = new window.Razorpay(options);
         rzp.open();
       } catch (err) {
-        console.error("Razorpay error:", err);
+        console.error("❌ [initiatePayment] Razorpay error:", err);
         reject(err);
       }
     });
   };
 
-  // ===== PACKAGE MANAGEMENT FUNCTIONS =====
-  
-  const fetchPackages = async () => {
-    console.log('🔄 [fetchPackages] Starting to fetch packages...');
+  // ===== TEST DATABASE CONNECTION =====
+  const testDatabaseConnection = async () => {
     try {
-      const { data, error } = await supabase
-        .from('packages')
-        .select('*')
-        .order('price', { ascending: true });
+      console.log("🔍 [testDatabaseConnection] Testing Supabase connection...");
 
-      console.log('📊 [fetchPackages] Supabase response:', { data, error });
+      // Test basic connection
+      const { data: tables, error: tablesError } = await supabase
+        .from('information_schema.tables')
+        .select('table_name')
+        .eq('table_schema', 'public')
+        .limit(5);
 
-      if (error) {
-        console.error('❌ [fetchPackages] Supabase error:', error);
-        throw error;
+      if (tablesError) {
+        console.error("❌ [testDatabaseConnection] Connection failed:", tablesError);
+        return { success: false, error: tablesError.message };
       }
 
-      if (data) {
-        console.log(`✅ [fetchPackages] Fetched ${data.length} packages from Supabase`);
-        const mappedPackages = data.map(p => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          price: p.price,
-          durationDays: p.duration_days,
-          features: p.features || [],
-          maxListings: p.max_listings,
-          maxBulkRequests: p.max_bulk_requests,
-          prioritySupport: p.priority_support,
-          aiCredits: p.ai_credits,
-          status: p.status,
-          badgeColor: p.badge_color,
-          isFeatured: p.is_featured,
-          createdAt: p.created_at,
-          updatedAt: p.updated_at
-        }));
-        console.log('📦 [fetchPackages] Mapped packages:', mappedPackages);
-        setPackages(mappedPackages);
-      } else {
-        console.warn('⚠️ [fetchPackages] No data returned from Supabase');
-      }
+      console.log("✅ [testDatabaseConnection] Connection successful, found tables:", tables?.map(t => t.table_name));
+
+      // Check if transactions table exists
+      const hasTransactionsTable = tables?.some(t => t.table_name === 'transactions');
+      console.log("📊 [testDatabaseConnection] Transactions table exists:", hasTransactionsTable);
+
+      return { success: true, tables: tables?.map(t => t.table_name), hasTransactionsTable };
     } catch (error) {
-      console.error('❌ [fetchPackages] Failed to fetch packages:', error.message);
-      console.error('❌ [fetchPackages] Full error:', error);
+      console.error("❌ [testDatabaseConnection] Test failed:", error);
+      return { success: false, error: error.message };
     }
   };
-
+  
   const addPackage = async (packageData) => {
     try {
       const { data, error } = await supabase
@@ -1434,22 +1762,98 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Verification Management Functions
+  const updateVerificationStatus = async (userId, status, documents = null) => {
+    try {
+      console.log(`🔄 [updateVerificationStatus] Updating verification for user ${userId} to ${status}`);
+      
+      const updateData = {
+        verification_status: status,
+        is_verified: status === 'verified'
+      };
+      
+      if (status === 'verified') {
+        updateData.verified_at = new Date().toISOString();
+      }
+      
+      if (documents) {
+        updateData.verification_documents = documents;
+      }
+
+      console.log('📤 [updateVerificationStatus] Sending to Supabase:', { userId, updateData });
+
+      // Optimistic update - Update UI immediately
+      setUsers(prev => prev.map(u => u.id === userId ? {
+        ...u,
+        verificationStatus: status,
+        isVerified: status === 'verified',
+        verifiedAt: status === 'verified' ? new Date().toISOString() : u.verifiedAt
+      } : u));
+      console.log('✅ [updateVerificationStatus] Optimistic UI update applied');
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId)
+        .select();
+
+      if (error) {
+        console.error('❌ [updateVerificationStatus] Error:', error);
+        console.error('❌ [updateVerificationStatus] Error details:', JSON.stringify(error, null, 2));
+        // Revert optimistic update on error
+        await fetchUsers();
+        throw error;
+      }
+
+      console.log('✅ [updateVerificationStatus] Successfully updated user in Supabase');
+      console.log('✅ [updateVerificationStatus] Updated row:', JSON.stringify(data, null, 2));
+      
+      return data;
+    } catch (error) {
+      console.error("❌ [updateVerificationStatus] Failed to update verification status:", error.message);
+      console.error("❌ [updateVerificationStatus] Full error:", error);
+      throw error;
+    }
+  };
+
+  const getPendingVerifications = async () => {
+    try {
+      console.log('🔄 [getPendingVerifications] Fetching pending verifications...');
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('verification_status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      console.log(`✅ [getPendingVerifications] Found ${data?.length || 0} pending verifications`);
+      return data || [];
+    } catch (error) {
+      console.error("Failed to fetch pending verifications:", error.message);
+      return [];
+    }
+  };
+
   return (
     <AppContext.Provider value={{ 
       user, loading, login, logout, 
-      users, setUsers, fetchUsers, updateUserStatus, deleteUser, updateUser, addUser,
+      users, setUsers, fetchUsers, fetchCommunityMembers, updateUserStatus, deleteUser, updateUser, addUser,
       listings, addListing, updateListingStatus, updateListing, deleteListing, setListings, fetchListings,
       transactions, purchaseListing, fetchTransactions, initiatePayment,
       reports, generateReport,
-      bulkRequests, addBulkRequest,
+      bulkRequests, addBulkRequest, fetchBulkRequests,
       settings, updateSettings,
       proposals, submitProposal, updateProposalStatus, fetchProposals,
+      testDatabaseConnection,
       packages, addPackage, updatePackage, deletePackage, fetchPackages,
       getStats,
       approvalHistory, logApprovalAction,
       notices, addNotice,
       theme, toggleTheme,
-      updateProfile, uploadFile
+      updateProfile, uploadFile,
+      updateVerificationStatus, getPendingVerifications
     }}>
       {children}
     </AppContext.Provider>

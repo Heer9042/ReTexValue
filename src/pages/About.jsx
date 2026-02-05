@@ -3,8 +3,46 @@ import { Target, Leaf, Globe2 } from 'lucide-react';
 import SustainabilityHeroImg from '../assets/sustainable_hero.png';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { useApp } from '../context/AppContext';
 
 export default function About() {
+  const { getStats, users, listings, fetchUsers, fetchListings } = useApp();
+  const [loading, setLoading] = React.useState(true);
+  const [stats, setStats] = React.useState({
+    totalWasteSold: 0,
+    totalFactories: 0,
+    totalRevenue: 0,
+    co2Saved: 0
+  });
+
+  // Fetch real data on component mount
+  React.useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchUsers(), fetchListings()]);
+      } catch (error) {
+        console.error('Failed to load about page data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchUsers, fetchListings]);
+
+  // Update stats when data changes
+  React.useEffect(() => {
+    if (!loading) {
+      const realStats = getStats();
+      setStats({
+        totalWasteSold: realStats.totalWasteSold || 0,
+        totalFactories: users.filter(u => u.role === 'Factory').length || 0,
+        totalRevenue: realStats.totalRevenue || 0,
+        co2Saved: realStats.co2Saved || 0
+      });
+    }
+  }, [loading, users, listings, getStats]);
+
   return (
     <>
       <Navbar />
@@ -25,12 +63,18 @@ export default function About() {
         {/* Stats Section */}
         <div className="py-12 bg-white dark:bg-slate-800/30 border-y border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-              <StatItem number="10k+" label="Tons Recycled" />
-              <StatItem number="500+" label="Partner Factories" />
-              <StatItem number="₹2Cr+" label="Value Generated" />
-              <StatItem number="50k" label="Trees Saved Equivalent" />
-            </div>
+            {loading ? (
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                <StatItem number={`${(stats.totalWasteSold / 1000).toFixed(1)}k+`} label="Tons Recycled" />
+                <StatItem number={`${stats.totalFactories}+`} label="Partner Factories" />
+                <StatItem number={`₹${(stats.totalRevenue / 10000000).toFixed(1)}Cr+`} label="Value Generated" />
+                <StatItem number={`${(stats.co2Saved / 1000).toFixed(1)}k kg`} label="CO2 Saved" />
+              </div>
+            )}
           </div>
         </div>
 

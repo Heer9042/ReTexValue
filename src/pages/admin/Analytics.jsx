@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Users, BadgeDollarSign, Activity, Globe, TrendingUp, BarChart3, Recycle, Factory, ShoppingBag, Leaf, Trash2, Calendar, Download, PieChart, Layers } from 'lucide-react';
 
 export default function Analytics() {
-  const { users, listings, transactions, getStats } = useApp();
+  const { users, listings, transactions, getStats, fetchUsers, fetchListings, fetchTransactions } = useApp();
   const [timeRange, setTimeRange] = useState('All Time');
-  
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchUsers(),
+          fetchListings(),
+          fetchTransactions()
+        ]);
+      } catch (error) {
+        console.error('Failed to load analytics data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchUsers, fetchListings, fetchTransactions]);
+
+  // All hooks must be called before conditional logic
   const stats = getStats();
   
   // Sell-through rate
@@ -17,6 +37,14 @@ export default function Analytics() {
 
   const maxGrowth = Math.max(...stats.growthData.map(d => d.count), 1);
   const totalFabricVol = Object.values(stats.fabricDistribution).reduce((a, b) => a + b, 0) || 1;
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -124,7 +152,7 @@ export default function Analytics() {
                             </div>
                             <div 
                                style={{ height: `${Math.max(heightPercent, 5)}%` }} 
-                               className="w-full max-w-[40px] bg-linear-to-t from-emerald-500/80 to-emerald-400 dark:from-emerald-600 dark:to-emerald-500 rounded-t-xl transition-all duration-500 group-hover:brightness-110 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                               className="w-full max-w-10 bg-linear-to-t from-emerald-500/80 to-emerald-400 dark:from-emerald-600 dark:to-emerald-500 rounded-t-xl transition-all duration-500 group-hover:brightness-110 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
                             ></div>
                          </div>
                          <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{data.month}</span>

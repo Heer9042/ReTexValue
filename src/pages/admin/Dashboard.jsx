@@ -1,10 +1,50 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ShieldAlert, BarChart, User, FileText, ArrowRight, TrendingUp, Activity, DollarSign, ShoppingBag, Factory } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function AdminDashboard() {
-  const { listings, transactions, getStats, bulkRequests, users } = useApp();
+  const { listings, transactions, getStats, bulkRequests, users, fetchListings, fetchTransactions, fetchBulkRequests, fetchUsers } = useApp();
+  const [loading, setLoading] = useState(false); // Start with false if we have cached data
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data
+      const hasCachedData = 
+        sessionStorage.getItem('retex_cache_users') ||
+        sessionStorage.getItem('retex_cache_listings') ||
+        sessionStorage.getItem('retex_cache_transactions') ||
+        sessionStorage.getItem('retex_cache_bulkRequests');
+
+      // Only show loading if no cached data exists
+      if (!hasCachedData) {
+        setLoading(true);
+      }
+
+      try {
+        await Promise.all([
+          fetchListings(),
+          fetchTransactions(),
+          fetchBulkRequests(),
+          fetchUsers()
+        ]);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchListings, fetchTransactions, fetchBulkRequests, fetchUsers]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   const stats = getStats();
 
   const pendingListings = listings.filter(l => l.status === 'Pending');

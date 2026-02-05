@@ -4,13 +4,14 @@ import { supabase } from '../../lib/supabase';
 import { Save, Plus, Trash2, Sliders, AlertTriangle, Percent, ShieldCheck, Database, Globe, BellRing, CheckCircle2, XCircle, RefreshCw, Activity, AlertCircle, X, Edit2, Clock } from 'lucide-react';
 
 export default function Settings() {
-  const { settings, updateSettings, users, listings, transactions } = useApp();
+  const { settings, updateSettings, users, listings, transactions, fetchUsers, fetchListings, fetchTransactions } = useApp();
 
   const [activeTab, setActiveTab] = useState('general');
   const [platformFee, setPlatformFee] = useState(5);
   const [categories, setCategories] = useState([]);
   const [newCategory, setNewCategory] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // System Alerts State
   const [alerts, setAlerts] = useState([]);
@@ -46,6 +47,26 @@ export default function Settings() {
     timezone: 'Asia/Kolkata',
     active: true
   });
+
+  // Sync with global settings when loaded
+  // Initial data fetch
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchUsers(),
+          fetchListings(),
+          fetchTransactions()
+        ]);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchUsers, fetchListings, fetchTransactions]);
 
   // Sync with global settings when loaded
   useEffect(() => {
@@ -145,7 +166,7 @@ export default function Settings() {
     
     try {
       // Test connection
-      const { data: connectionTest, error: connectionError } = await supabase
+      const { error: connectionError } = await supabase
         .from('profiles')
         .select('id')
         .limit(1);
@@ -453,7 +474,7 @@ export default function Settings() {
                      </div>
                      <label className="relative inline-flex items-center cursor-pointer scale-110">
                         <input type="checkbox" checked={maintenanceMode} onChange={() => setMaintenanceMode(!maintenanceMode)} className="sr-only peer" />
-                        <div className="w-12 h-6.5 bg-slate-200 peer-focus:outline-none dark:bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-rose-500"></div>
+                        <div className="w-12 h-6.5 bg-slate-200 peer-focus:outline-none dark:bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-rose-500"></div>
                      </label>
                   </div>
                </div>
@@ -829,6 +850,14 @@ export default function Settings() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-12 animate-in fade-in duration-500">
       {/* Top Navigation / Actions */}
@@ -1087,7 +1116,7 @@ export default function Settings() {
                     onChange={(e) => setRegionForm({ ...regionForm, active: e.target.checked })}
                     className="sr-only peer"
                   />
-                  <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none dark:bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-emerald-500"></div>
+                  <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none dark:bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-emerald-500"></div>
                 </label>
                 <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Active</span>
               </div>

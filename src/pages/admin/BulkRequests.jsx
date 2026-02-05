@@ -1,11 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { FileText, ArrowRight } from 'lucide-react';
 
 export default function BulkRequests() {
-  const { bulkRequests } = useApp();
+  const { bulkRequests, fetchBulkRequests } = useApp();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check for cached data
+      const hasCachedData = sessionStorage.getItem('retex_cache_bulkRequests');
+      
+      if (!hasCachedData) {
+        setLoading(true);
+      }
+
+      try {
+        await fetchBulkRequests();
+      } catch (error) {
+        console.error('Failed to load bulk requests:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchBulkRequests]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">

@@ -3,10 +3,37 @@ import { Search, Filter, Trash2, Edit2, ShoppingBag, Eye, MapPin, Package } from
 import { useApp } from '../../context/AppContext';
 
 export default function ManageListings() {
-  const { listings, deleteListing, users } = useApp();
+  const { listings, deleteListing, users, fetchListings, fetchUsers } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [selectedListing, setSelectedListing] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      // Check for cached data
+      const hasCachedData = 
+        sessionStorage.getItem('retex_cache_listings') ||
+        sessionStorage.getItem('retex_cache_users');
+      
+      if (!hasCachedData) {
+        setLoading(true);
+      }
+
+      try {
+        await Promise.all([
+          fetchListings(),
+          fetchUsers()
+        ]);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchListings, fetchUsers]);
 
   // Helper to get factory name
   const getFactoryName = (factoryId) => {

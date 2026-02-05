@@ -1,13 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Send, Package, DollarSign, Calendar, FileText, MapPin, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
 export default function FactoryBulkRequests() {
-  const { bulkRequests, user, proposals } = useApp();
+  const { bulkRequests, user, proposals, fetchBulkRequests, fetchProposals } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Fetch bulk requests on mount
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = bulkRequests && bulkRequests.length > 0;
+      
+      if (!hasData) {
+        setLoading(true);
+      }
+      
+      try {
+        await Promise.all([
+          fetchBulkRequests(),
+          fetchProposals()
+        ]);
+      } catch (error) {
+        console.error('Failed to load bulk requests:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchBulkRequests, fetchProposals]);
 
   // Filter bulk requests that this factory hasn't already responded to
   const availableRequests = bulkRequests.filter(request => {
@@ -39,6 +64,17 @@ export default function FactoryBulkRequests() {
   const handleSubmitProposal = (requestId) => {
     navigate(`/factory/proposal/${requestId}`);
   };
+
+  if (loading && (!bulkRequests || bulkRequests.length === 0)) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400">Loading bulk requests...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-10">

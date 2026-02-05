@@ -23,6 +23,7 @@ export default function BuyerProfile() {
   const [localPreview, setLocalPreview] = useState(null);
 
   const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState({});
 
   // Sync if user data loads later
   React.useEffect(() => {
@@ -72,18 +73,59 @@ export default function BuyerProfile() {
   const handleSave = async (e) => {
     e.preventDefault();
     
-    // Validation Logic
+    // Comprehensive Validation Logic
+    const newErrors = {};
     const phoneRegex = /^[0-9]{10}$/;
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
-    if (formData.phone && !phoneRegex.test(formData.phone.replace(/\s/g, '').replace('+91', ''))) {
-        alert("Please enter a valid 10-digit phone number.");
-        return;
+    // Full Name validation
+    if (!formData.full_name.trim()) {
+      newErrors.full_name = 'Full name is required';
+    } else if (formData.full_name.trim().length < 2) {
+      newErrors.full_name = 'Full name must be at least 2 characters';
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.full_name)) {
+      newErrors.full_name = 'Full name should only contain letters and spaces';
     }
 
-    if (formData.gst_number && formData.gst_number.length > 0 && formData.gst_number.length !== 15) {
-        alert("GST Number must be exactly 15 characters.");
-        return;
+    // Company Name validation (optional)
+    if (formData.company_name.trim() && formData.company_name.trim().length < 2) {
+      newErrors.company_name = 'Company name must be at least 2 characters';
+    }
+
+    // Phone validation (optional but validate if provided)
+    if (formData.phone) {
+      const cleanPhone = formData.phone.replace(/\s/g, '').replace('+91', '');
+      if (!phoneRegex.test(cleanPhone)) {
+        newErrors.phone = 'Phone must be a valid 10-digit number';
+      }
+    }
+
+    // Location validation (optional but validate if provided)
+    if (formData.location.trim() && formData.location.trim().length < 2) {
+      newErrors.location = 'Location must be at least 2 characters';
+    }
+
+    // Address validation (optional but validate if provided)
+    if (formData.address.trim() && formData.address.trim().length < 5) {
+      newErrors.address = 'Address must be at least 5 characters';
+    } else if (formData.address.trim().length > 200) {
+      newErrors.address = 'Address must be less than 200 characters';
+    }
+
+    // GST Number validation (optional but validate if provided)
+    if (formData.gst_number.trim()) {
+      if (formData.gst_number.length !== 15) {
+        newErrors.gst_number = 'GST Number must be exactly 15 characters';
+      } else if (!gstRegex.test(formData.gst_number)) {
+        newErrors.gst_number = 'Invalid GST format (e.g. 27XXXXX0000X1Z5)';
+      }
+    }
+
+    setErrors(newErrors);
+
+    // Stop submission if errors exist
+    if (Object.keys(newErrors).length > 0) {
+      return;
     }
 
     setSubmitting(true);
@@ -257,35 +299,105 @@ export default function BuyerProfile() {
                </div>
 
                <div className="grid md:grid-cols-2 gap-6 mb-8">
-                  <InputGroup label="Full Legal Name" icon={<User size={16} />}>
-                     <input type="text" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium" placeholder="Aditya Roy" />
-                  </InputGroup>
-                  <InputGroup label="GSTIN / Tax ID" icon={<Shield size={16} />}>
-                     <input type="text" value={formData.gst_number} onChange={e => setFormData({...formData, gst_number: e.target.value})} className="w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium" placeholder="27XXXXX0000X1Z5" />
-                  </InputGroup>
+                  <div>
+                    <InputGroup label="Full Legal Name" icon={<User size={16} />}>
+                       <input 
+                         type="text" 
+                         value={formData.full_name} 
+                         onChange={e => {
+                           setFormData({...formData, full_name: e.target.value});
+                           if (errors.full_name) setErrors({...errors, full_name: ''});
+                         }}
+                         className={`w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium border-b-2 transition-all ${errors.full_name ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                         placeholder="Aditya Roy" 
+                       />
+                    </InputGroup>
+                    {errors.full_name && <p className="text-xs text-red-500 mt-2 ml-4">{errors.full_name}</p>}
+                  </div>
+                  <div>
+                    <InputGroup label="GSTIN / Tax ID" icon={<Shield size={16} />}>
+                       <input 
+                         type="text" 
+                         value={formData.gst_number} 
+                         onChange={e => {
+                           setFormData({...formData, gst_number: e.target.value});
+                           if (errors.gst_number) setErrors({...errors, gst_number: ''});
+                         }}
+                         className={`w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium border-b-2 transition-all ${errors.gst_number ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                         placeholder="27XXXXX0000X1Z5" 
+                       />
+                    </InputGroup>
+                    {errors.gst_number && <p className="text-xs text-red-500 mt-2 ml-4">{errors.gst_number}</p>}
+                  </div>
                </div>
                
                <div className="grid md:grid-cols-2 gap-6 mb-8">
-                  <InputGroup label="Organization Name" icon={<Building size={16} />}>
-                     <input type="text" value={formData.company_name} onChange={e => setFormData({...formData, company_name: e.target.value})} className="w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium" placeholder="ReTex Industries" />
-                  </InputGroup>
-                  <InputGroup label="Geospatial Hub" icon={<Globe size={16} />}>
-                     <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium" placeholder="Pune, Maharashtra" />
-                  </InputGroup>
+                  <div>
+                    <InputGroup label="Organization Name" icon={<Building size={16} />}>
+                       <input 
+                         type="text" 
+                         value={formData.company_name} 
+                         onChange={e => {
+                           setFormData({...formData, company_name: e.target.value});
+                           if (errors.company_name) setErrors({...errors, company_name: ''});
+                         }}
+                         className={`w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium border-b-2 transition-all ${errors.company_name ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                         placeholder="ReTex Industries" 
+                       />
+                    </InputGroup>
+                    {errors.company_name && <p className="text-xs text-red-500 mt-2 ml-4">{errors.company_name}</p>}
+                  </div>
+                  <div>
+                    <InputGroup label="Geospatial Hub" icon={<Globe size={16} />}>
+                       <input 
+                         type="text" 
+                         value={formData.location} 
+                         onChange={e => {
+                           setFormData({...formData, location: e.target.value});
+                           if (errors.location) setErrors({...errors, location: ''});
+                         }}
+                         className={`w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium border-b-2 transition-all ${errors.location ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                         placeholder="Pune, Maharashtra" 
+                       />
+                    </InputGroup>
+                    {errors.location && <p className="text-xs text-red-500 mt-2 ml-4">{errors.location}</p>}
+                  </div>
                </div>
 
                <div className="mb-8">
                   <InputGroup label="Registered Mailing Address" icon={<MapPin size={16} />}>
-                     <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium" placeholder="Plot 45, Industrial Zone..." />
+                     <input 
+                       type="text" 
+                       value={formData.address} 
+                       onChange={e => {
+                         setFormData({...formData, address: e.target.value});
+                         if (errors.address) setErrors({...errors, address: ''});
+                       }}
+                       className={`w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium border-b-2 transition-all ${errors.address ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                       placeholder="Plot 45, Industrial Zone..." 
+                     />
                   </InputGroup>
+                  {errors.address && <p className="text-xs text-red-500 mt-2 ml-4">{errors.address}</p>}
                </div>
 
                <div className="pt-6 border-t border-slate-100 dark:border-slate-700">
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Primary Contact</h3>
                   <div className="grid md:grid-cols-2 gap-6">
-                     <InputGroup label="Phone Number" icon={<Phone size={16} />}>
-                        <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium" placeholder="+91 00000 00000" />
-                     </InputGroup>
+                  <div>
+                    <InputGroup label="Phone Number" icon={<Phone size={16} />}>
+                       <input 
+                         type="text" 
+                         value={formData.phone} 
+                         onChange={e => {
+                           setFormData({...formData, phone: e.target.value});
+                           if (errors.phone) setErrors({...errors, phone: ''});
+                         }}
+                         className={`w-full bg-transparent outline-none text-slate-900 dark:text-white font-medium border-b-2 transition-all ${errors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}
+                         placeholder="+91 00000 00000" 
+                       />
+                    </InputGroup>
+                    {errors.phone && <p className="text-xs text-red-500 mt-2 ml-4">{errors.phone}</p>}
+                  </div>
                      <InputGroup label="Email Address" icon={<Mail size={16} />}>
                         <input type="email" value={formData.email} readOnly className="w-full bg-transparent outline-none text-slate-400 font-medium cursor-not-allowed" />
                      </InputGroup>

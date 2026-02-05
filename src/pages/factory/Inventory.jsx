@@ -1,14 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Trash2, Edit, Search, Filter, SlidersHorizontal, ArrowUpDown, Package, Trash, AlertCircle, Plus, X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
 import blendedImg from '../../assets/blended_fabric.png';
 
 export default function Inventory() {
-  const { listings, deleteListing, addListing, updateListing, user, uploadFile } = useApp();
+  const { listings, deleteListing, addListing, updateListing, user, uploadFile, fetchListings } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
   const [sortBy, setSortBy] = useState('Newest');
+  const [loading, setLoading] = useState(false);
+
+  // Fetch listings on mount
+  useEffect(() => {
+    const loadListings = async () => {
+      // Only show loader if no cached data
+      if (listings.length === 0) setLoading(true);
+      
+      try {
+        await fetchListings();
+      } catch (error) {
+        console.error('Failed to load listings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadListings();
+  }, [fetchListings]);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -125,6 +143,14 @@ export default function Inventory() {
           setIsLoading(false);
       }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 relative">

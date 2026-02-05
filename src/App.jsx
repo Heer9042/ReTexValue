@@ -11,6 +11,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Packages from './pages/Packages';
 import ResetPassword from './pages/ResetPassword';
+import FactoryDetails from './pages/FactoryDetails';
+import FactoryPending from './pages/FactoryPending';
 
 // App Pages
 import FactoryDashboard from './pages/factory/Dashboard';
@@ -37,6 +39,7 @@ import AdminSettings from './pages/admin/Settings';
 import AdminReports from './pages/admin/Reports';
 import AdminTransactions from './pages/admin/Transactions';
 import ManagePackages from './pages/admin/ManagePackages';
+import ManageFactoryRegistrations from './pages/admin/ManageFactoryRegistrations';
 import SubmitProposal from './pages/factory/SubmitProposal';
 import FactoryProposals from './pages/factory/Proposals';
 import FactorySettings from './pages/factory/Settings';
@@ -52,6 +55,8 @@ import BuyerLayout from './components/BuyerLayout';
 const ProtectedRoute = ({ children, role }) => {
   const { user, loading } = useApp();
   const storedRole = localStorage.getItem('userRole');
+  const normalizedUserRole = (user?.role || storedRole || '').toLowerCase();
+  const normalizedRouteRole = (role || '').toLowerCase();
 
   // 🚀 Optimization: If no data in Storage AND no user in context, redirect immediately
   // This satisfies the "if not stored then logout/redirect" requirement without flicker.
@@ -72,11 +77,11 @@ const ProtectedRoute = ({ children, role }) => {
 
   if (!user) return <Navigate to="/login" replace />;
   
-  if (role && user.role !== role) {
+  if (role && normalizedUserRole !== normalizedRouteRole) {
       // Redirect to their dashboard instead of home if they have a role but wrong one
-      if(user.role === 'admin') return <Navigate to="/admin" replace />;
-      if(user.role === 'factory') return <Navigate to="/factory" replace />;
-      if(user.role === 'buyer') return <Navigate to="/buyer" replace />;
+      if(normalizedUserRole === 'admin') return <Navigate to="/admin" replace />;
+      if(normalizedUserRole === 'factory') return <Navigate to="/factory" replace />;
+      if(normalizedUserRole === 'buyer') return <Navigate to="/buyer" replace />;
       return <Navigate to="/" replace />;
   }
   return children;
@@ -103,6 +108,8 @@ function AppContent() {
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/register/factory-details" element={<FactoryDetails />} />
+        <Route path="/register/factory-pending" element={<FactoryPending />} />
         <Route path="/packages" element={<Packages />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         
@@ -320,6 +327,13 @@ function AppContent() {
           <ProtectedRoute role="admin">
             <AdminLayout>
                <ManagePackages />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/factory-registrations" element={
+          <ProtectedRoute role="admin">
+            <AdminLayout>
+               <ManageFactoryRegistrations />
             </AdminLayout>
           </ProtectedRoute>
         } />

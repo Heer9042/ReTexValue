@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, TrendingUp, AlertCircle, Clock, ArrowRight, Package, CheckCircle, Zap, ShieldCheck, Heart } from 'lucide-react';
@@ -9,8 +9,43 @@ import polyesterImg from '../../assets/polyester_fabric.png';
 import blendedImg from '../../assets/blended_fabric.png';
 
 export default function BuyerDashboard() {
-  const { user, transactions, proposals, listings, bulkRequests } = useApp();
+  const { user, transactions, proposals, listings, bulkRequests, fetchTransactions, fetchProposals, fetchListings, fetchBulkRequests } = useApp();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = (transactions && transactions.length > 0) || (listings && listings.length > 0);
+      if (!hasData) setLoading(true);
+      
+      try {
+        await Promise.all([
+          fetchTransactions(),
+          fetchProposals(),
+          fetchListings(),
+          fetchBulkRequests()
+        ]);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchTransactions, fetchProposals, fetchListings, fetchBulkRequests]);
+
+  // Show loader only if we're fetching AND we have no data
+  if (loading && (!transactions || transactions.length === 0) && (!listings || listings.length === 0)) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Data Calculations for current authenticated buyer
   const myOrders = transactions.filter(t => t.buyerId === user?.id);

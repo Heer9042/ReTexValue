@@ -4,10 +4,32 @@ import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, Check, Loader2, Send, Info, Package, DollarSign, Calendar, FileText } from 'lucide-react';
 
 export default function BulkRequest() {
-  const { user, addBulkRequest, listings, loading } = useApp();
+  const { user, addBulkRequest, listings, fetchListings } = useApp();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = listings && listings.length > 0;
+      
+      if (!hasData) {
+        setLoading(true);
+      }
+      
+      try {
+        await fetchListings();
+      } catch (error) {
+        console.error('Failed to load listings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchListings]);
 
   // Derive available fabrics from actual listings
   const availableData = useMemo(() => {
@@ -71,8 +93,57 @@ export default function BulkRequest() {
     }));
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Quantity validation
+    if (!formData.quantity || formData.quantity <= 0) {
+      newErrors.quantity = 'Quantity must be greater than 0 kg';
+    } else if (formData.quantity > 10000000) {
+      newErrors.quantity = 'Quantity cannot exceed 10,000,000 kg';
+    }
+
+    // Target Price validation (optional but validate if provided)
+    if (formData.targetPrice) {
+      if (formData.targetPrice <= 0) {
+        newErrors.targetPrice = 'Price must be greater than 0';
+      } else if (formData.targetPrice > 100000) {
+        newErrors.targetPrice = 'Price seems unreasonably high';
+      }
+    }
+
+    // Deadline validation
+    if (!formData.deadline) {
+      newErrors.deadline = 'Deadline is required';
+    } else {
+      const deadlineDate = new Date(formData.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (deadlineDate < today) {
+        newErrors.deadline = 'Deadline must be in the future';
+      }
+    }
+
+    // Description validation
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
+    } else if (formData.description.trim().length < 10) {
+      newErrors.description = 'Description must be at least 10 characters';
+    } else if (formData.description.trim().length > 500) {
+      newErrors.description = 'Description must be less than 500 characters';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setSubmitting(true);
     
     try {
@@ -93,7 +164,8 @@ export default function BulkRequest() {
     }
   };
 
-  if (loading) {
+  // Show loader only if we're fetching AND we have no data
+  if (loading && (!listings || listings.length === 0)) {
       return (
           <div className="max-w-5xl mx-auto p-12 text-center">
               <Loader2 className="animate-spin w-12 h-12 mx-auto text-emerald-500 mb-4" />
@@ -195,10 +267,14 @@ export default function BulkRequest() {
                             type="number" 
                             required
                             value={formData.quantity}
-                            onChange={e => setFormData({...formData, quantity: e.target.value})}
-                            className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400"
+                            onChange={e => {
+                              setFormData({...formData, quantity: e.target.value});
+                              if (errors.quantity) setErrors({...errors, quantity: ''});
+                            }}
+                            className={`w-full bg-slate-50 dark:bg-slate-900/50 border ${errors.quantity ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400`}
                             placeholder="e.g. 5000"
                           />
+                          {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
                        </InputGroup>
 
                        <InputGroup label="Target Price / kg (₹)">
@@ -207,12 +283,16 @@ export default function BulkRequest() {
                                type="number" 
                                required
                                value={formData.targetPrice}
-                               onChange={e => setFormData({...formData, targetPrice: e.target.value})}
-                               className="w-full pl-10 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400"
+                               onChange={e => {
+                                 setFormData({...formData, targetPrice: e.target.value});
+                                 if (errors.targetPrice) setErrors({...errors, targetPrice: ''});
+                               }}
+                               className={`w-full pl-10 bg-slate-50 dark:bg-slate-900/50 border ${errors.targetPrice ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400`}
                                placeholder="Optional"
                              />
                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                           </div>
+                          {errors.targetPrice && <p className="text-xs text-red-500 mt-1">{errors.targetPrice}</p>}
                        </InputGroup>
                     </div>
                  </div>
@@ -232,11 +312,14 @@ export default function BulkRequest() {
                                required
                                min={new Date().toISOString().split('T')[0]}
                                value={formData.deadline}
-                               onChange={e => setFormData({...formData, deadline: e.target.value})}
-                               className="w-full pl-10 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                               onChange={e => {
+                                 setFormData({...formData, deadline: e.target.value});
+                                 if (errors.deadline) setErrors({...errors, deadline: ''});
+                               }}
+                               className={`w-full bg-slate-50 dark:bg-slate-900/50 border ${errors.deadline ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all`}
                              />
-                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                           </div>
+                          {errors.deadline && <p className="text-xs text-red-500 mt-1">{errors.deadline}</p>}
                        </InputGroup>
                     </div>
 
@@ -244,10 +327,15 @@ export default function BulkRequest() {
                        <textarea 
                          rows="4"
                          value={formData.description}
-                         onChange={e => setFormData({...formData, description: e.target.value})}
-                         className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none placeholder:text-slate-400"
+                         onChange={e => {
+                           setFormData({...formData, description: e.target.value});
+                           if (errors.description) setErrors({...errors, description: ''});
+                         }}
+                         className={`w-full bg-slate-50 dark:bg-slate-900/50 border ${errors.description ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none placeholder:text-slate-400`}
                          placeholder="Describe specific quality requirements, color codes, end-usage, or packaging needs..."
                        />
+                       {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
+                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{formData.description.length}/500</p>
                     </InputGroup>
                  </div>
 

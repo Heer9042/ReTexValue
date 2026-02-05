@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Package, Plus, Edit2, Trash2, Check, X, Star, DollarSign, Calendar, Zap, Shield, TrendingUp } from 'lucide-react';
 
@@ -12,10 +12,26 @@ const BADGE_COLORS = {
 };
 
 export default function ManagePackages() {
-  const { packages, addPackage, updatePackage, deletePackage } = useApp();
+  const { packages, addPackage, updatePackage, deletePackage, fetchPackages } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  // Fetch packages on mount (only once)
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        setPageLoading(true);
+        await fetchPackages();
+      } catch (error) {
+        console.error('Failed to load packages:', error);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+    loadPackages();
+  }, []); // ✅ Empty dependency array - fetch only once on mount
 
   const [formData, setFormData] = useState({
     name: '',

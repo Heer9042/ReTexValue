@@ -148,6 +148,8 @@ Execute these SQL files in order via **Supabase Dashboard → SQL Editor**:
 ```sql
 -- Run initial schema migrations
 -- Your existing tables: profiles, listings, transactions, etc.
+-- If transactions table doesn't exist, run:
+-- Execute: create_transactions_table.sql
 ```
 
 #### B. Premium Packages (NEW Feature)

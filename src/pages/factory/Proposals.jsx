@@ -1,10 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { FileText, CheckCircle, Clock, XCircle, ArrowRight, User } from 'lucide-react';
+import { FileText, CheckCircle, Clock, XCircle, ArrowRight, User, X, Calendar, MessageSquare, IndianRupee } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function FactoryProposals() {
-  const { proposals, user } = useApp();
+  const { proposals, user, fetchProposals } = useApp();
+  const [selectedProposal, setSelectedProposal] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = proposals && proposals.length > 0;
+      
+      if (!hasData) {
+        setLoading(true);
+      }
+      
+      try {
+        await fetchProposals();
+      } catch (error) {
+        console.error('Failed to load proposals:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchProposals]);
+
+  // Show loader only if we're fetching AND we have no data
+  if (loading && (!proposals || proposals.length === 0)) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading proposals...</p>
+        </div>
+      </div>
+    );
+  }
   
   // Mock proposals if none exist for factory context (since context might be shared/mocked)
   // Filtering proposals made BY this factory or TO this factory? 
@@ -58,7 +92,7 @@ export default function FactoryProposals() {
                 <p className="text-xs text-slate-600 dark:text-slate-300">{p.date}</p>
               </div>
             </div>
-            <button className="w-full mt-3 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm flex items-center justify-center gap-1 py-2 bg-slate-50 dark:bg-slate-700/30 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            <button className="w-full mt-3 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm flex items-center justify-center gap-1 py-2 bg-slate-50 dark:bg-slate-700/30 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" onClick={() => setSelectedProposal(p)}>
               View Details <ArrowRight size={14} />
             </button>
           </div>
@@ -106,7 +140,7 @@ export default function FactoryProposals() {
                            <StatusBadge status={p.status} />
                         </td>
                         <td className="p-5">
-                           <button className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <button className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setSelectedProposal(p)}>
                               View Details <ArrowRight size={14} />
                            </button>
                         </td>
@@ -116,6 +150,113 @@ export default function FactoryProposals() {
             </table>
          </div>
       </div>
+
+      {/* Proposal Details Modal */}
+      {selectedProposal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Proposal Details</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Request #{selectedProposal.requestId}</p>
+                </div>
+                <button 
+                  onClick={() => setSelectedProposal(null)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Fabric Type</label>
+                    <p className="text-lg font-semibold text-slate-900 dark:text-white mt-1">{selectedProposal.fabricType}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Quantity Required</label>
+                    <p className="text-lg font-semibold text-slate-900 dark:text-white mt-1">{selectedProposal.quantity} kg</p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Your Quote</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <IndianRupee size={16} className="text-emerald-600" />
+                      <span className="text-lg font-semibold text-slate-900 dark:text-white">{selectedProposal.priceQuoted}/kg</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Value</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <IndianRupee size={16} className="text-emerald-600" />
+                      <span className="text-lg font-semibold text-slate-900 dark:text-white">{selectedProposal.totalPrice}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Buyer</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <User size={16} />
+                      </div>
+                      <span className="text-slate-700 dark:text-slate-300">{selectedProposal.buyer}</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Delivery Date</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Calendar size={16} className="text-blue-600" />
+                      <span className="text-slate-700 dark:text-slate-300">{selectedProposal.deliveryDate}</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Status</label>
+                    <div className="mt-1">
+                      <StatusBadge status={selectedProposal.status} />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-slate-500 dark:text-slate-400">Submitted On</label>
+                    <p className="text-slate-700 dark:text-slate-300 mt-1">{selectedProposal.date}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {selectedProposal.message && (
+                <div>
+                  <label className="text-sm font-medium text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <MessageSquare size={16} />
+                    Message
+                  </label>
+                  <div className="mt-2 p-4 bg-slate-50 dark:bg-slate-700/30 rounded-lg">
+                    <p className="text-slate-700 dark:text-slate-300">{selectedProposal.message}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+              <button 
+                onClick={() => setSelectedProposal(null)}
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

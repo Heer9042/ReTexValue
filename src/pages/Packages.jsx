@@ -24,14 +24,35 @@ const BADGE_GLOW = {
 };
 
 export default function Packages() {
-  const { packages, user, loading } = useApp();
+  const { packages, user, loading, fetchPackages } = useApp();
   const navigate = useNavigate();
+  const [packageLoading, setPackageLoading] = React.useState(true);
+
+  // Fetch packages on component mount (only once)
+  React.useEffect(() => {
+    const loadPackages = async () => {
+      setPackageLoading(true);
+      console.log('🔄 [Packages Page] Fetching packages on mount...');
+      try {
+        await fetchPackages();
+        console.log('✅ [Packages Page] Packages fetched successfully');
+      } catch (error) {
+        console.error('❌ [Packages Page] Error fetching packages:', error);
+      } finally {
+        setPackageLoading(false);
+        console.log('✅ [Packages Page] Loading complete');
+      }
+    };
+    
+    loadPackages();
+  }, [fetchPackages]); // ✅ Include fetchPackages as dependency
 
   // Debug: Log packages to console
   console.log('📦 [Packages Page] Total packages from context:', packages?.length || 0);
   console.log('📦 [Packages Page] All packages:', packages);
+  console.log('📦 [Packages Page] Loading state:', { packageLoading, loading });
 
-  const activePackages = packages.filter(p => p.status === 'active');
+  const activePackages = packages.filter(p => p.status === 'active' || !p.status);
   const featuredPackages = activePackages.filter(p => p.isFeatured);
   const regularPackages = activePackages.filter(p => !p.isFeatured);
 
@@ -40,12 +61,44 @@ export default function Packages() {
 
   const handleChoosePackage = (pkg) => {
     if (!user) {
-      navigate('/register');
+      navigate('/login');
     } else {
       // TODO: Implement subscription flow
-      alert(`Subscribing to ${pkg.name} package. Payment integration coming soon!`);
+      alert(`Subscribing to ${pkg.name} package (₹${pkg.price}). Payment integration coming soon!`);
     }
   };
+
+  // Show loading state
+  if (packageLoading || loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-slate-600 dark:text-slate-400">Loading pricing plans...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Show empty state if no packages
+  if (!packages || packages.length === 0) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="text-6xl mb-4">📦</div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">No Packages Available</h2>
+            <p className="text-slate-600 dark:text-slate-400">Check back later for pricing plans.</p>
+          </div>
+        </div>
+        <Footer />
+      </>
+    );
+  }
 
   return (
     <>
@@ -55,8 +108,8 @@ export default function Packages() {
         {/* Hero Section */}
         <div className="relative pt-32 pb-20 sm:pt-40 sm:pb-32 overflow-hidden">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl overflow-hidden pointer-events-none">
-            <div className="absolute top-[10%] left-[20%] w-[500px] h-[500px] bg-emerald-300/20 dark:bg-emerald-500/10 rounded-full blur-[120px] animate-pulse" />
-            <div className="absolute bottom-[0%] right-[10%] w-[600px] h-[600px] bg-purple-300/20 dark:bg-purple-500/10 rounded-full blur-[120px] animate-pulse delay-700" />
+            <div className="absolute top-[10%] left-[20%] w-125 h-125 bg-emerald-300/20 dark:bg-emerald-500/10 rounded-full blur-[120px] animate-pulse" />
+            <div className="absolute bottom-[0%] right-[10%] w-150 h-150 bg-purple-300/20 dark:bg-purple-500/10 rounded-full blur-[120px] animate-pulse delay-700" />
           </div>
 
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
@@ -77,6 +130,39 @@ export default function Packages() {
             <p className="mt-6 max-w-2xl mx-auto text-xl text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
               Scale your textile waste management with plans designed for factories, buyers, and enterprises
             </p>
+          </div>
+        </div>
+
+        {/* Value Highlights */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
+                <TrendingUp className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Grow Faster</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
+                Get more visibility with priority placement and premium insights.
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
+                <Zap className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">AI Powered</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
+                Automate waste classification with built‑in AI credits.
+              </p>
+            </div>
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
+                <Shield className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Secure Support</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
+                Priority support and compliance-ready workflows for enterprises.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -143,26 +229,35 @@ export default function Packages() {
           )}
         </div>
 
-        {/* FAQ or Additional Info Section */}
-        <div className="bg-slate-50 dark:bg-slate-800/50 py-20 border-t border-slate-200 dark:border-slate-800">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">
-              Still have questions?
-            </h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 mb-8">
-              Our team is here to help you choose the right plan for your needs
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white rounded-full font-bold transition-all shadow-lg shadow-emerald-500/25">
-                Contact Sales
-              </button>
-              <button className="px-8 py-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-full font-bold transition-all">
-                View FAQ
-              </button>
+        {/* FAQ */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-3xl p-8 md:p-10">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Common Questions</h2>
+              <p className="text-slate-600 dark:text-slate-400 mt-2">Everything you need to know about plans.</p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Can I change plans later?</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Yes, you can upgrade or downgrade anytime from your dashboard.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Do plans include AI credits?</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Every plan includes AI credits; higher tiers include more.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Is there a free trial?</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">We offer a starter plan with flexible pricing for small teams.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Need enterprise support?</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Contact our team for custom SLAs and integrations.</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+
+        </div>
       <Footer />
     </>
   );

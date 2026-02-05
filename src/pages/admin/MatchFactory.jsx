@@ -22,19 +22,42 @@ function saveAssignments(assignments) {
 export default function AdminMatchFactory() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { bulkRequests, users, logApprovalAction } = useApp();
+  const { bulkRequests, users, logApprovalAction, fetchBulkRequests, fetchUsers } = useApp();
 
-  const req = bulkRequests.find(r => String(r.id) === String(id));
-
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedFactoryIds, setSelectedFactoryIds] = useState([]);
   const [assignedFactoryIds, setAssignedFactoryIds] = useState([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchBulkRequests(), fetchUsers()]);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchBulkRequests, fetchUsers]);
 
   useEffect(() => {
     const assignments = loadAssignments();
     const existing = assignments[String(id)] || [];
     setAssignedFactoryIds(existing);
   }, [id]);
+
+  const req = bulkRequests.find(r => String(r.id) === String(id));
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   const factories = useMemo(() => {
     const verifiedFactories = users.filter(u => u.role === 'Factory' && u.status === 'Verified');

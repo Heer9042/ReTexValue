@@ -11,6 +11,7 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Check if we are actually in a recovery session
   useEffect(() => {
@@ -27,20 +28,36 @@ export default function ResetPassword() {
 
   const handleReset = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    const newFieldErrors = {};
 
-    if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
-        setLoading(false);
-        return;
+    // Password validation
+    if (!password) {
+      newFieldErrors.password = 'Password is required';
+    } else if (password.length < 8) {
+      newFieldErrors.password = 'Password must be at least 8 characters long';
+    } else if (!/(?=.*[a-z])/.test(password)) {
+      newFieldErrors.password = 'Password must contain at least one lowercase letter';
+    } else if (!/(?=.*[A-Z])/.test(password)) {
+      newFieldErrors.password = 'Password must contain at least one uppercase letter';
+    } else if (!/(?=.*\d)/.test(password)) {
+      newFieldErrors.password = 'Password must contain at least one number';
     }
 
-    if (password !== confirmPassword) {
-        setError('Passwords do not match.');
-        setLoading(false);
-        return;
+    // Confirm password validation
+    if (!confirmPassword) {
+      newFieldErrors.confirmPassword = 'Please confirm your password';
+    } else if (password && password !== confirmPassword) {
+      newFieldErrors.confirmPassword = 'Passwords do not match';
     }
+
+    setFieldErrors(newFieldErrors);
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const { error } = await supabase.auth.updateUser({ password: password });
@@ -97,22 +114,30 @@ export default function ResetPassword() {
                     <input 
                         type="password" 
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (fieldErrors.password) setFieldErrors({...fieldErrors, password: ''});
+                        }}
+                        className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} bg-slate-50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
                         placeholder="••••••••"
                         required
                     />
+                    {fieldErrors.password && <p className="text-xs text-red-500 ml-1 mt-1">{fieldErrors.password}</p>}
                 </div>
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Confirm Password</label>
                     <input 
                         type="password" 
                         value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          if (fieldErrors.confirmPassword) setFieldErrors({...fieldErrors, confirmPassword: ''});
+                        }}
+                        className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.confirmPassword ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} bg-slate-50 dark:bg-slate-900/50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
                         placeholder="••••••••"
                         required
                     />
+                    {fieldErrors.confirmPassword && <p className="text-xs text-red-500 ml-1 mt-1">{fieldErrors.confirmPassword}</p>}
                 </div>
 
                 <button 

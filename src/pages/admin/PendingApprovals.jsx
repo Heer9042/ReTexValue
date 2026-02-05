@@ -1,14 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Check, X, ShieldAlert, User, MapPin, Edit2, Trash2, Save } from 'lucide-react';
 
 export default function PendingApprovals() {
-  const { listings, updateListingStatus, updateListing, deleteListing } = useApp();
-  const pendingListings = listings.filter(l => l.status === 'Pending');
+    const { listings, updateListingStatus, updateListing, deleteListing, fetchListings } = useApp();
+    const [loading, setLoading] = useState(true);
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({});
+    const [processingId, setProcessingId] = useState(null);
+    const [editErrors, setEditErrors] = useState({});
 
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [processingId, setProcessingId] = useState(null); // Track which item is being processed
+    useEffect(() => {
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                await fetchListings();
+            } catch (error) {
+                console.error('Failed to load listings:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, [fetchListings]);
+
+    const pendingListings = listings.filter(l => l.status === 'Pending');
+
+    if (loading) {
+        return (
+            <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
   const handleEdit = (listing) => {
       setEditingId(listing.id);
@@ -23,9 +47,60 @@ export default function PendingApprovals() {
 
   const handleChange = (e) => {
       setEditForm({ ...editForm, [e.target.name]: e.target.value });
+      // Clear error for this field
+      if (editErrors[e.target.name]) {
+        setEditErrors({...editErrors, [e.target.name]: ''});
+      }
+  };
+
+  const validateEditForm = () => {
+    const errors = {};
+    
+    // Fabric Type validation
+    if (!editForm.fabricType || !editForm.fabricType.trim()) {
+      errors.fabricType = 'Fabric type is required';
+    } else if (editForm.fabricType.trim().length < 2) {
+      errors.fabricType = 'Fabric type must be at least 2 characters';
+    }
+    
+    // Price validation
+    if (!editForm.price || editForm.price <= 0) {
+      errors.price = 'Price must be greater than 0';
+    } else if (Number(editForm.price) > 100000) {
+      errors.price = 'Price seems unreasonably high';
+    }
+    
+    // Quantity validation
+    if (!editForm.quantity || editForm.quantity <= 0) {
+      errors.quantity = 'Quantity must be greater than 0 kg';
+    } else if (editForm.quantity > 10000000) {
+      errors.quantity = 'Quantity cannot exceed 10,000,000 kg';
+    }
+    
+    // Location validation
+    if (!editForm.location || !editForm.location.trim()) {
+      errors.location = 'Location is required';
+    } else if (editForm.location.trim().length < 2) {
+      errors.location = 'Location must be at least 2 characters';
+    }
+    
+    // Description validation (optional)
+    if (editForm.description && editForm.description.trim().length > 0) {
+      if (editForm.description.trim().length < 5) {
+        errors.description = 'Description must be at least 5 characters if provided';
+      } else if (editForm.description.trim().length > 500) {
+        errors.description = 'Description must be less than 500 characters';
+      }
+    }
+    
+    setEditErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSave = async (id) => {
+      if (!validateEditForm()) {
+        return;
+      }
       await updateListing(id, editForm);
       setEditingId(null);
   };
@@ -73,23 +148,29 @@ export default function PendingApprovals() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-emerald-500/30">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase">Fabric Type</label>
-                                <input name="fabricType" value={editForm.fabricType} onChange={handleChange} className="w-full bg-white dark:bg-slate-800 border rounded px-2 py-1 text-sm outline-none focus:border-emerald-500" />
+                                <input name="fabricType" value={editForm.fabricType} onChange={handleChange} className={`w-full bg-white dark:bg-slate-800 border ${editErrors.fabricType ? 'border-red-500' : 'border-slate-300'} rounded px-2 py-1 text-sm outline-none focus:border-emerald-500`} />
+                                {editErrors.fabricType && <p className="text-red-500 text-[10px] mt-1">{editErrors.fabricType}</p>}
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase">Price / kg</label>
-                                <input name="price" type="number" value={editForm.price} onChange={handleChange} className="w-full bg-white dark:bg-slate-800 border rounded px-2 py-1 text-sm outline-none focus:border-emerald-500" />
+                                <input name="price" type="number" value={editForm.price} onChange={handleChange} className={`w-full bg-white dark:bg-slate-800 border ${editErrors.price ? 'border-red-500' : 'border-slate-300'} rounded px-2 py-1 text-sm outline-none focus:border-emerald-500`} />
+                                {editErrors.price && <p className="text-red-500 text-[10px] mt-1">{editErrors.price}</p>}
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase">Quantity (kg)</label>
-                                <input name="quantity" type="number" value={editForm.quantity} onChange={handleChange} className="w-full bg-white dark:bg-slate-800 border rounded px-2 py-1 text-sm outline-none focus:border-emerald-500" />
+                                <input name="quantity" type="number" value={editForm.quantity} onChange={handleChange} className={`w-full bg-white dark:bg-slate-800 border ${editErrors.quantity ? 'border-red-500' : 'border-slate-300'} rounded px-2 py-1 text-sm outline-none focus:border-emerald-500`} />
+                                {editErrors.quantity && <p className="text-red-500 text-[10px] mt-1">{editErrors.quantity}</p>}
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase">Location</label>
-                                <input name="location" value={editForm.location} onChange={handleChange} className="w-full bg-white dark:bg-slate-800 border rounded px-2 py-1 text-sm outline-none focus:border-emerald-500" />
+                                <input name="location" value={editForm.location} onChange={handleChange} className={`w-full bg-white dark:bg-slate-800 border ${editErrors.location ? 'border-red-500' : 'border-slate-300'} rounded px-2 py-1 text-sm outline-none focus:border-emerald-500`} />
+                                {editErrors.location && <p className="text-red-500 text-[10px] mt-1">{editErrors.location}</p>}
                             </div>
                             <div className="md:col-span-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase">Description</label>
-                                <textarea name="description" value={editForm.description} onChange={handleChange} className="w-full bg-white dark:bg-slate-800 border rounded px-2 py-1 text-sm outline-none focus:border-emerald-500" rows="2" />
+                                <textarea name="description" value={editForm.description} onChange={handleChange} className={`w-full bg-white dark:bg-slate-800 border ${editErrors.description ? 'border-red-500' : 'border-slate-300'} rounded px-2 py-1 text-sm outline-none focus:border-emerald-500`} rows="2" />
+                                {editErrors.description && <p className="text-red-500 text-[10px] mt-1">{editErrors.description}</p>}
+                                <p className="text-[10px] text-slate-500 mt-1">{editForm.description?.length || 0}/500</p>
                             </div>
                             <div className="md:col-span-2 flex justify-end gap-2 pt-2">
                                 <button onClick={handleCancel} className="px-3 py-1.5 text-slate-600 hover:bg-slate-200 rounded text-sm font-medium">Cancel</button>

@@ -1,12 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Search, Filter, ShoppingBag, Clock, CheckCircle, ArrowUpRight, Receipt, Package, MapPin, Truck } from 'lucide-react';
 
 export default function BuyerOrders() {
-  const { transactions, listings, user } = useApp();
-  // Filter for current authenticated buyer
-  const myOrders = transactions.filter(t => t.buyerId === user?.id);
+  const { transactions, listings, user, fetchTransactions, fetchListings } = useApp();
   const [filter, setFilter] = useState('All');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = transactions && transactions.length > 0;
+      
+      if (!hasData) {
+        setLoading(true);
+      }
+      
+      try {
+        await Promise.all([fetchTransactions(), fetchListings()]);
+      } catch (error) {
+        console.error('Failed to load orders:', error);
+      } finally {
+        // Always hide loader after fetch attempt, whether successful or not
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchTransactions, fetchListings]);
+
+  // Show loader only if we're fetching AND we have no data
+  if (loading && (!transactions || transactions.length === 0)) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading orders...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state if no data after loading
+  if (!loading && (!transactions || transactions.length === 0)) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <ShoppingBag className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">No Orders Yet</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">Start browsing the marketplace to place your first order</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Filter for current authenticated buyer
+  const myOrders = transactions && transactions.length > 0 
+    ? transactions.filter(t => {
+        // If user not loaded yet, return all transactions
+        if (!user?.id) return true;
+        return t.buyerId === user.id;
+      })
+    : [];
 
   const filteredOrders = filter === 'All' ? myOrders : myOrders.filter(t => t.status === filter);
 

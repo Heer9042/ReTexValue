@@ -1,11 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Download, FileText, Activity, AlertCircle, Plus, X, Search, Clock, ShieldCheck, History } from 'lucide-react';
 
 export default function Reports() {
-  const { reports, generateReport, listings, approvalHistory } = useApp();
+  const { reports, generateReport, listings, approvalHistory, fetchListings } = useApp();
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [activeTab, setActiveTab] = useState('Reports');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await fetchListings();
+      } catch (error) {
+        console.error('Failed to load listings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchListings]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
   
   // Calculate KPIs
   const totalReports = reports ? reports.length : 0;

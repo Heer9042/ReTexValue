@@ -1,13 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { FileText, CheckCircle, XCircle, Clock, ChevronRight, MessageSquare, AlertCircle, Send, Package, Calendar, DollarSign } from 'lucide-react';
 import TenderTracker from '../../components/TenderTracker';
 
 export default function BuyerProposals() {
-  const { proposals, updateProposalStatus, user, initiatePayment, bulkRequests } = useApp();
+  const { proposals, updateProposalStatus, user, initiatePayment, bulkRequests, fetchProposals, fetchBulkRequests } = useApp();
   const [showNegotiate, setShowNegotiate] = useState(null);
   const [negotiationMsg, setNegotiationMsg] = useState('');
   const [activeTab, setActiveTab] = useState('received');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Check if we have cached data - if yes, don't show loader
+      const hasData = proposals && proposals.length > 0;
+      
+      if (!hasData) {
+        setLoading(true);
+      }
+      
+      try {
+        await Promise.all([fetchProposals(), fetchBulkRequests()]);
+      } catch (error) {
+        console.error('Failed to load proposals:', error);
+      } finally {
+        // Always hide loader after fetch attempt, whether successful or not
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchProposals, fetchBulkRequests]);
+
+  // Show loader only if we're fetching AND we have no data
+  if (loading && (!proposals || proposals.length === 0)) {
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading proposals...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state if no data after loading
+  if (!loading && (!proposals || proposals.length === 0) && (!bulkRequests || bulkRequests.length === 0)) {
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <FileText className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">No Proposals Yet</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">Create bulk requests to receive proposals from factories</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleAcceptProposal = async (proposal) => {
     try {
@@ -30,8 +77,21 @@ export default function BuyerProposals() {
   };
 
   // Filter for current buyer
-  const myProposals = proposals.filter(p => p.buyerId === user?.id);
-  const myBulkRequests = bulkRequests.filter(r => r.buyerId === user?.id);
+  const myProposals = proposals && proposals.length > 0 
+    ? proposals.filter(p => {
+        // If user not loaded yet, return all proposals
+        if (!user?.id) return true;
+        return p.buyerId === user.id;
+      })
+    : [];
+  
+  const myBulkRequests = bulkRequests && bulkRequests.length > 0
+    ? bulkRequests.filter(r => {
+        // If user not loaded yet, return all requests
+        if (!user?.id) return true;
+        return r.buyerId === user.id;
+      })
+    : [];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-10">

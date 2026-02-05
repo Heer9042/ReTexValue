@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Search, Filter, Download, ArrowUpRight, ArrowDownLeft, DollarSign, Calendar, BadgeDollarSign } from 'lucide-react';
 
 export default function Transactions() {
-  const { transactions, listings, users, settings } = useApp();
+  const { transactions, listings, users, settings, fetchTransactions, fetchListings, fetchUsers } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('All');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchTransactions(),
+          fetchListings(),
+          fetchUsers()
+        ]);
+      } catch (error) {
+        console.error('Failed to load transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchTransactions, fetchListings, fetchUsers]);
 
   // Helper to find participant names
   const getParticipant = (id, role) => {
