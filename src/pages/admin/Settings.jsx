@@ -11,7 +11,7 @@ export default function Settings() {
   const [categories, setCategories] = useState([]);
   const [newCategory, setNewCategory] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
 
   // System Alerts State
   const [alerts, setAlerts] = useState([]);
@@ -47,12 +47,27 @@ export default function Settings() {
     timezone: 'Asia/Kolkata',
     active: true
   });
+  // Try to load from cache first - populate state immediately
+  useEffect(() => {
+    try {
+      const cachedUsers = sessionStorage.getItem('retex_cache_users');
+      const cachedListings = sessionStorage.getItem('retex_cache_listings');
+      const cachedTransactions = sessionStorage.getItem('retex_cache_transactions');
+      if (cachedUsers && cachedListings && cachedTransactions) {
+        // All caches exist, show data immediately
+        setDataLoading(false);
+      } else {
+        setDataLoading(true);
+      }
+    } catch (e) {
+      console.warn('Cache read error:', e);
+      setDataLoading(true);
+    }
+  }, []);
 
-  // Sync with global settings when loaded
   // Initial data fetch
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
       try {
         await Promise.all([
           fetchUsers(),
@@ -62,7 +77,7 @@ export default function Settings() {
       } catch (error) {
         console.error('Failed to load data:', error);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     loadData();
@@ -850,7 +865,7 @@ export default function Settings() {
     }
   };
 
-  if (loading) {
+  if (dataLoading) {
     return (
       <div className="max-w-5xl mx-auto flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

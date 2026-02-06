@@ -42,7 +42,14 @@ export const AppProvider = ({ children }) => {
       return null;
     }
   });
-  const [loading, setLoading] = useState(!user); // Only loading if no cached user
+  const [loading, setLoading] = useState(() => {
+    // Only show loading if NO user cached AND NO data cached
+    const hasUser = localStorage.getItem('retex_user');
+    const hasData = sessionStorage.getItem('retex_cache_listings') || 
+                    sessionStorage.getItem('retex_cache_users') ||
+                    sessionStorage.getItem('retex_cache_transactions');
+    return !hasUser && !hasData;
+  });
   const [users, setUsers] = useState(() => {
     try {
       const cached = sessionStorage.getItem('retex_cache_users');
@@ -972,12 +979,17 @@ export const AppProvider = ({ children }) => {
       }
     };
 
-    // 2. Fast-Path Data Fetch (Run immediately if we have a cached user in localStorage)
+    // 2. Fast-Path Data Fetch (Run immediately if we have cached data)
     const cachedUser = localStorage.getItem('retex_user');
-    if (cachedUser) {
-      console.log("⚡ [Init] Found cached user, starting fast-path fetch...");
-      setLoading(true);
-      runInitialFetchOnce();
+    const hasCachedData = sessionStorage.getItem('retex_cache_listings') || 
+                          sessionStorage.getItem('retex_cache_users');
+    
+    if (cachedUser || hasCachedData) {
+      console.log("⚡ [Init] Found cached user/data, setting loading to false...");
+      setLoading(false);
+      if (cachedUser) {
+        runInitialFetchOnce();
+      }
     }
 
     initializeAuth();
@@ -2128,7 +2140,7 @@ export const AppProvider = ({ children }) => {
       users, setUsers, fetchUsers, fetchCommunityMembers, updateUserStatus, deleteUser, updateUser, addUser,
       listings, addListing, updateListingStatus, updateListing, deleteListing, setListings, fetchListings,
       transactions, purchaseListing, fetchTransactions, initiatePayment,
-      reports, generateReport,
+      reports, generateReport, fetchReports,
       bulkRequests, addBulkRequest, fetchBulkRequests,
       settings, updateSettings,
       proposals, submitProposal, updateProposalStatus, fetchProposals,

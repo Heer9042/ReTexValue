@@ -5,11 +5,29 @@ import { Users, BadgeDollarSign, Activity, Globe, TrendingUp, BarChart3, Recycle
 export default function Analytics() {
   const { users, listings, transactions, getStats, fetchUsers, fetchListings, fetchTransactions } = useApp();
   const [timeRange, setTimeRange] = useState('All Time');
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
 
+  // Try to load from cache first - populate state immediately
+  useEffect(() => {
+    try {
+      const cachedUsers = sessionStorage.getItem('retex_cache_users');
+      const cachedListings = sessionStorage.getItem('retex_cache_listings');
+      const cachedTransactions = sessionStorage.getItem('retex_cache_transactions');
+      if (cachedUsers && cachedListings && cachedTransactions) {
+        // All caches exist, show data immediately
+        setDataLoading(false);
+      } else {
+        setDataLoading(true);
+      }
+    } catch (e) {
+      console.warn('Cache read error:', e);
+      setDataLoading(true);
+    }
+  }, []);
+
+  // Fetch fresh data
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
       try {
         await Promise.all([
           fetchUsers(),
@@ -19,7 +37,7 @@ export default function Analytics() {
       } catch (error) {
         console.error('Failed to load analytics data:', error);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     loadData();
@@ -38,7 +56,7 @@ export default function Analytics() {
   const maxGrowth = Math.max(...stats.growthData.map(d => d.count), 1);
   const totalFabricVol = Object.values(stats.fabricDistribution).reduce((a, b) => a + b, 0) || 1;
 
-  if (loading) {
+  if (dataLoading) {
     return (
       <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

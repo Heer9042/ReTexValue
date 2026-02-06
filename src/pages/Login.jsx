@@ -148,7 +148,7 @@ export default function Login() {
         
         // Check if factory user is unverified (pending admin approval)
         if (userRole === 'factory' && verificationStatus === 'unverified') {
-            setError('Your seller account is pending admin approval. You will receive an email once approved.');
+            setError('🔒 Your seller account is pending admin verification. This usually takes 1-2 business days. You will receive an email at ' + user.email + ' once approved.');
             setLoading(false);
             await supabase.auth.signOut();
             return;
@@ -222,7 +222,11 @@ export default function Login() {
           </p>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm border border-red-200 dark:border-red-800">
+            <div className={`mb-4 p-4 rounded-lg text-sm border ${
+              error.includes('seller') || error.includes('pending') || error.includes('verification')
+                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
+            }`}>
                 {error}
             </div>
           )}

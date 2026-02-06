@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Mail, Lock, Loader2, ArrowRight, Factory } from 'lucide-react';
+import { User, Mail, Lock, Loader2, ArrowRight, Factory, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Navbar from '../components/Navbar';
 
@@ -12,6 +12,7 @@ export default function Register() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -211,11 +212,13 @@ export default function Register() {
       errors.username = 'Username can only contain letters, numbers, and underscores';
     }
 
-    // Company Name validation
-    if (!companyName) {
-      errors.companyName = 'Company name is required';
-    } else if (companyName.length < 2) {
-      errors.companyName = 'Company name must be at least 2 characters';
+    // Company Name validation (required for sellers only)
+    if (formData.wantsToBeFactory) {
+      if (!companyName) {
+        errors.companyName = 'Company name is required for sellers';
+      } else if (companyName.length < 2) {
+        errors.companyName = 'Company name must be at least 2 characters';
+      }
     }
     
     // Password validation
@@ -347,8 +350,33 @@ export default function Register() {
     } catch (err) {
         console.error("Registration error:", err);
         let msg = err.message;
-        if (msg.includes('rate limit')) {
-             msg = "Supabase 3 signups/hr limit reached. Please wait or use a different email/IP.";
+        let isRateLimit = false;
+        
+        // Handle rate limiting errors
+        if (msg.includes('rate limit') || 
+            msg.includes('email rate limit exceeded') || 
+            msg.includes('Too Many Requests') ||
+            err.status === 429) {
+             msg = "⏳ Too many signup attempts. Please wait 1 hour before trying again, or use a different email address.";
+             isRateLimit = true;
+             setRateLimitCooldown(3600); // 1 hour in seconds
+             
+             // Start countdown timer
+             const timer = setInterval(() => {
+               setRateLimitCooldown(prev => {
+                 if (prev <= 1) {
+                   clearInterval(timer);
+                   return 0;
+                 }
+                 return prev - 1;
+               });
+             }, 1000);
+        } else if (msg.includes('user_already_exists') || msg.includes('User already registered')) {
+             msg = "This email is already registered. Please log in or use a different email.";
+        } else if (msg.includes('password') || msg.includes('weak')) {
+             msg = "Password doesn't meet security requirements. Use uppercase, lowercase, numbers, and special characters.";
+        } else if (msg.includes('invalid_credentials')) {
+             msg = "Invalid email or password format.";
         }
         setError(msg);
     } finally {
@@ -477,7 +505,11 @@ export default function Register() {
           <p className="text-center text-slate-500 dark:text-slate-400 mb-8">Join the circular economy revolution</p>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm border border-red-200 dark:border-red-800">
+            <div className={`mb-4 p-3 rounded-lg text-sm border ${
+              error.includes('rate limit') || error.includes('Too many')
+                ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800'
+                : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
+            }`}>
                 {error}
             </div>
           )}
@@ -557,8 +589,12 @@ export default function Register() {
                 )}
             </div>
 
+            {formData.wantsToBeFactory && (
             <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Company Name</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1 flex items-center gap-2">
+                    <Factory size={16} className="text-emerald-600" />
+                    Company Name *
+                </label>
                 <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <input 
@@ -567,19 +603,20 @@ export default function Register() {
                         value={formData.companyName}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        placeholder="Enter your company name"
+                        placeholder="Enter your company/factory name"
                         className={`w-full pl-10 pr-4 py-3 rounded-xl border ${
                           fieldErrors.companyName 
                             ? 'border-red-500 focus:ring-red-500' 
                             : 'border-slate-200 dark:border-slate-700 focus:ring-emerald-500'
                         } bg-slate-50 dark:bg-slate-900/50 focus:ring-2 outline-none transition-all placeholder:text-slate-400`}
-                        required
+                        required={formData.wantsToBeFactory}
                     />
                 </div>
                 {fieldErrors.companyName && (
                   <p className="text-xs text-red-500 ml-1 mt-1">{fieldErrors.companyName}</p>
                 )}
             </div>
+            )}
 
             <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Password</label>
@@ -703,35 +740,53 @@ export default function Register() {
 
                 {/* Factory Registration Option */}
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <label className="flex items-start gap-3 cursor-pointer group">
+                    <label className="flex items-start gap-3 cursor-pointer group p-4 rounded-xl bg-slate-50 dark:bg-slate-900/30 border-2 border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all">
                         <input
                             type="checkbox"
                             name="wantsToBeFactory"
                             checked={formData.wantsToBeFactory}
                             onChange={(e) => setFormData({ ...formData, wantsToBeFactory: e.target.checked })}
-                            className="mt-1 w-4 h-4 text-emerald-600 bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded focus:ring-emerald-500 focus:ring-2"
+                            className="mt-1 w-5 h-5 text-emerald-600 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer"
                         />
                         <div className="flex-1">
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                                I want to register as a Seller
+                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors flex items-center gap-2">
+                                <Factory size={16} className="text-emerald-600" />
+                                Register as a Textile Waste Seller
                             </span>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                Register as a textile waste producer and start selling your inventory. Requires admin approval.
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                                ✅ Start selling your textile waste inventory<br />
+                                ✅ Access to factory dashboard & analytics<br />
+                                ⏳ Requires admin approval (1-2 business days)<br />
+                                🔒 Account locked until verified by admin
                             </p>
                         </div>
                     </label>
+                    {formData.wantsToBeFactory && (
+                      <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300">
+                        <p className="font-semibold mb-1">⚠️ Admin Verification Required</p>
+                        <p className="text-xs">Your registration will be reviewed by our admin team. You'll receive an email once approved, then you can login and start selling.</p>
+                      </div>
+                    )}
                 </div>
             </div>
 
             <button 
                 type="submit" 
-                disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
+                disabled={loading || rateLimitCooldown > 0}
+                className={`w-full text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 mt-6 ${
+                  rateLimitCooldown > 0
+                    ? 'bg-slate-400 cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 disabled:opacity-70 disabled:cursor-not-allowed'
+                }`}
             >
                 {loading ? (
                     <>
                         <Loader2 className="w-5 h-5 animate-spin" />
                         Creating Account...
+                    </>
+                ) : rateLimitCooldown > 0 ? (
+                    <>
+                        ⏳ Try again in {Math.floor(rateLimitCooldown / 60)}:{String(rateLimitCooldown % 60).padStart(2, '0')}
                     </>
                 ) : (
                     <>

@@ -1,10 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './Navbar';
 import AdminSidebar from './AdminSidebar';
 import { Menu } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 export default function AdminLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { fetchUsers, fetchListings, fetchTransactions, user } = useApp();
+
+  // Auto-fetch all admin data on mount to cache it
+  useEffect(() => {
+    if (user?.role?.toLowerCase() !== 'admin') return;
+    
+    const fetchAdminData = async () => {
+      try {
+        console.log('📊 [AdminLayout] Auto-fetching admin data to cache...');
+        await Promise.all([
+          fetchUsers(),
+          fetchListings(),
+          fetchTransactions()
+        ]);
+        console.log('✅ [AdminLayout] Admin data cached successfully');
+      } catch (error) {
+        console.error('Failed to cache admin data:', error);
+      }
+    };
+
+    fetchAdminData();
+  }, [user, fetchUsers, fetchListings, fetchTransactions]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">

@@ -60,24 +60,6 @@ export default function About() {
           </div>
         </div>
 
-        {/* Stats Section */}
-        <div className="py-12 bg-white dark:bg-slate-800/30 border-y border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {loading ? (
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-                <StatItem number={`${(stats.totalWasteSold / 1000).toFixed(1)}k+`} label="Tons Recycled" />
-                <StatItem number={`${stats.totalFactories}+`} label="Partner Factories" />
-                <StatItem number={`₹${(stats.totalRevenue / 10000000).toFixed(1)}Cr+`} label="Value Generated" />
-                <StatItem number={`${(stats.co2Saved / 1000).toFixed(1)}k kg`} label="CO2 Saved" />
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Vision & Mission */}
         <div className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
            <div className="grid md:grid-cols-2 gap-16 items-center">
@@ -114,17 +96,6 @@ export default function About() {
       </div>
       <Footer />
     </>
-  );
-}
-
-function StatItem({ number, label }) {
-  return (
-    <div>
-      <div className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-linear-to-r from-emerald-600 to-cyan-600 dark:from-emerald-400 dark:to-cyan-400 mb-2">
-        {number}
-      </div>
-      <div className="text-sm font-medium text-slate-500 dark:text-slate-500 uppercase tracking-widest">{label}</div>
-    </div>
   );
 }
 

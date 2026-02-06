@@ -4,21 +4,37 @@ import { Check, X, ShieldAlert, User, MapPin, Edit2, Trash2, Save } from 'lucide
 
 export default function PendingApprovals() {
     const { listings, updateListingStatus, updateListing, deleteListing, fetchListings } = useApp();
-    const [loading, setLoading] = useState(true);
+    const [dataLoading, setDataLoading] = useState(true);
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({});
     const [processingId, setProcessingId] = useState(null);
     const [editErrors, setEditErrors] = useState({});
 
+    // Try to load from cache first - populate listings state immediately
+    useEffect(() => {
+        try {
+            const cached = sessionStorage.getItem('retex_cache_listings');
+            if (cached) {
+                // Cache exists, so we can show data immediately
+                setDataLoading(false);
+            } else {
+                setDataLoading(true);
+            }
+        } catch (e) {
+            console.warn('Cache read error:', e);
+            setDataLoading(true);
+        }
+    }, []);
+
+    // Fetch fresh data
     useEffect(() => {
         const loadData = async () => {
-            setLoading(true);
             try {
                 await fetchListings();
             } catch (error) {
                 console.error('Failed to load listings:', error);
             } finally {
-                setLoading(false);
+                setDataLoading(false);
             }
         };
         loadData();
@@ -26,7 +42,7 @@ export default function PendingApprovals() {
 
     const pendingListings = listings.filter(l => l.status === 'Pending');
 
-    if (loading) {
+    if (dataLoading) {
         return (
             <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[50vh]">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
