@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, BarChart2, Settings, FileText, ShieldAlert, DollarSign, X, LogOut, Package, ShoppingBag, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart2, Settings, FileText, ShieldAlert, IndianRupee, X, LogOut, Package, ShoppingBag, Building2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function AdminSidebar({ isOpen, onClose }) {
@@ -22,7 +22,7 @@ export default function AdminSidebar({ isOpen, onClose }) {
     { name: 'Manage Listings', path: '/admin/listings', icon: <ShoppingBag size={20} /> },
     { name: 'Manage Packages', path: '/admin/packages', icon: <Package size={20} /> },
     { name: 'Analytics', path: '/admin/analytics', icon: <BarChart2 size={20} /> },
-    { name: 'Transactions', path: '/admin/transactions', icon: <DollarSign size={20} /> },
+    { name: 'Transactions', path: '/admin/transactions', icon: <IndianRupee size={20} /> },
     { name: 'Reports & Logs', path: '/admin/reports', icon: <FileText size={20} /> },
     { name: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> },
   ];

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Package, Plus, Edit2, Trash2, Check, X, Star, DollarSign, Calendar, Zap, Shield, TrendingUp } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, Check, X, Star, Calendar, Zap, Shield, TrendingUp } from 'lucide-react';
 
 const BADGE_COLORS = {
   slate: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',

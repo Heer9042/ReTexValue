@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Users, BadgeDollarSign, Activity, Globe, TrendingUp, BarChart3, Recycle, Factory, ShoppingBag, Leaf, Trash2, Calendar, Download, PieChart, Layers } from 'lucide-react';
+import { Users, IndianRupee, Activity, Globe, TrendingUp, BarChart3, Recycle, Factory, ShoppingBag, Leaf, Trash2, Calendar, Download, PieChart, Layers } from 'lucide-react';
 
 export default function Analytics() {
   const { users, listings, transactions, getStats, fetchUsers, fetchListings, fetchTransactions } = useApp();
@@ -126,7 +126,7 @@ export default function Analytics() {
              title="Platform Revenue" 
              value={`₹${stats.totalRevenue.toLocaleString()}`}
              label="Total Marketplace GMV"
-             icon={<BadgeDollarSign className="text-amber-500" />}
+             icon={<IndianRupee className="text-amber-500" />}
              color="amber"
              trend={stats.trends.revenue}
           />

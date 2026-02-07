@@ -110,12 +110,12 @@ export default function Contact() {
                <ContactItem 
                   icon={<Phone className="text-emerald-600 dark:text-emerald-400" />}
                   title="Call Us"
-                  detail="+91 (800) 123-4567"
+                  detail="+91 9876543210"
                />
                <ContactItem 
                   icon={<MapPin className="text-emerald-600 dark:text-emerald-400" />}
                   title="Visit HQ"
-                  detail="123 Sustainability Ave, Mumbai, India"
+                  detail="Surat, Gujarat, India"
                />
             </div>
          </div>

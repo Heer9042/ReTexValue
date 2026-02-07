@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Search, Filter, Download, ArrowUpRight, ArrowDownLeft, DollarSign, Calendar, BadgeDollarSign } from 'lucide-react';
+import { Search, Filter, Download, ArrowUpRight, ArrowDownLeft, IndianRupee, Calendar } from 'lucide-react';
 
 export default function Transactions() {
   const { transactions, listings, users, settings, fetchTransactions, fetchListings, fetchUsers } = useApp();
@@ -61,7 +61,7 @@ export default function Transactions() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
            <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-              <BadgeDollarSign className="text-emerald-500" /> Transaction Ledger
+              <IndianRupee className="text-emerald-500" /> Transaction Ledger
            </h1>
            <p className="text-slate-500 dark:text-slate-400 mt-1">Audit Trail for all marketplace financial activities.</p>
         </div>
@@ -228,7 +228,7 @@ export default function Transactions() {
                      <tr>
                         <td colSpan="7" className="p-20 text-center">
                            <div className="flex flex-col items-center gap-2 text-slate-400">
-                              <DollarSign size={48} className="opacity-10" />
+                              <IndianRupee size={48} className="opacity-10" />
                               <p className="font-bold text-sm">No transactions found matching your criteria.</p>
                            </div>
                         </td>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
-  TrendingUp, PieChart, BadgeDollarSign, Leaf, AlertCircle, Package, 
+  TrendingUp, PieChart, IndianRupee, Leaf, AlertCircle, Package, 
   ArrowUpRight, ArrowDownRight, ShoppingBag, Target
 } from 'lucide-react';
 import {
@@ -301,7 +301,7 @@ export default function Analytics() {
            title="Total Revenue"
            value={`₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
            subtitle={`Net: ₹${netRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-           icon={<BadgeDollarSign />}
+           icon={<IndianRupee />}
            trend={revenueGrowth}
            color="blue"
         />

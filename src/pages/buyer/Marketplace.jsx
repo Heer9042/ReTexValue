@@ -27,21 +27,32 @@ export default function Marketplace() {
       }
       
       try {
+        console.log('📥 [Marketplace] Fetching listings...');
         await fetchListings();
+        console.log('✅ [Marketplace] Listings fetched successfully');
       } catch (error) {
-        console.error('Failed to load listings:', error);
+        console.error('❌ [Marketplace] Failed to load listings:', error);
       } finally {
         setLoading(false);
       }
     };
+    
+    // Load listings when component mounts
     loadListings();
-  }, [fetchListings]);
+  }, []);
   
   const categories = ['All', ...(settings?.categories || ['Cotton', 'Polyester', 'Silk', 'Wool', 'Blended'])];
 
-  // Rest of state logic...
   // Strict filtering for valid, live listings from DB
-  const liveListings = listings.filter(l => l.status === 'Live' && l.quantity > 0);
+  // Accept listings with 'Live' status OR any truthy status if quantity > 0
+  const liveListings = listings.filter(l => {
+    const isAvailable = l.quantity > 0;
+    const isLive = l.status && (l.status === 'Live' || l.status === 'live' || l.status === 'Pending' || l.status === 'pending');
+    return isAvailable && isLive;
+  });
+  
+  // Debug logging
+  console.log('📊 [Marketplace] Total listings:', listings.length, 'Live listings:', liveListings.length);
 
   const filteredListings = liveListings.filter(l => {
     // Safety check for fields
@@ -248,6 +259,16 @@ export default function Marketplace() {
         }
     }
   };
+
+  // Debug: Log current state
+  useEffect(() => {
+    console.log('🔍 [Marketplace] Component state:', {
+      loading,
+      listingsCount: listings?.length,
+      liveListingsCount: liveListings?.length,
+      hasData: listings && listings.length > 0
+    });
+  }, [listings, loading]);
 
   // Show loader only if we're fetching AND we have no data
   if (loading && (!listings || listings.length === 0)) {

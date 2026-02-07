@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   BarChart3, TrendingUp, PieChart, ShoppingCart, Leaf, AlertCircle, Package, 
-  ArrowUpRight, ArrowDownRight, DollarSign, Calendar, Truck, Factory, 
+  ArrowUpRight, ArrowDownRight, IndianRupee, Calendar, Truck, Factory, 
   TrendingDown, Activity, Target, Award
 } from 'lucide-react';
 import {
@@ -323,7 +323,7 @@ export default function Analytics() {
            title="Total Spent"
            value={`₹${totalSpent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
            subtitle={`₹${avgMonthlySpend.toLocaleString('en-IN', { maximumFractionDigits: 0 })} avg/month`}
-           icon={<DollarSign />}
+           icon={<IndianRupee />}
            trend={spentGrowth}
            color="blue"
         />

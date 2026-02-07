@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { DollarSign, Scale, Leaf, ArrowRight, Activity, Plus, Package, TrendingUp, BarChart3, Recycle } from 'lucide-react';
+import { IndianRupee, Scale, Leaf, ArrowRight, Activity, Plus, Package, TrendingUp, BarChart3, Recycle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import blendedImg from '../../assets/blended_fabric.png';
 import cottonImg from '../../assets/cotton_fabric.png';
@@ -80,7 +80,7 @@ export default function FactoryDashboard() {
         <StatCard 
            title="Gross Revenue" 
            value={`₹${factoryRevenue.toLocaleString()}`} 
-           icon={<DollarSign size={24} />} 
+           icon={<IndianRupee size={24} />} 
            color="emerald"
            subtitle="Total generated income"
         />

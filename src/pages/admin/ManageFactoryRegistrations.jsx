@@ -1,39 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Check, X, Loader2, Factory, Mail, Phone, MapPin, Building2, FileText, Clock, CheckCircle2, AlertTriangle, Filter, MoreVertical, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 
 export default function ManageFactoryRegistrations() {
-  const { users, fetchUsers, updateVerificationStatus, updateUserStatus } = useApp();
+  const navigate = useNavigate();
+  const { users, updateVerificationStatus, updateUserStatus } = useApp();
   console.log('📊 [ManageFactoryRegistrations] Users loaded:', users.length);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // All, Unverified, Verified
   const [selectedFactory, setSelectedFactory] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [approvalNote, setApprovalNote] = useState('');
   const [rejectionNote, setRejectionNote] = useState('');
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(null); // 'approve' or 'reject'
 
-  // Fetch users on component mount
+  // Initialize component - load cached users
   useEffect(() => {
-    const loadUsers = async () => {
-      const hasCachedUsers = sessionStorage.getItem('retex_cache_users');
-      if (!hasCachedUsers) {
-        setIsLoading(true);
-      }
-
-      try {
-        await fetchUsers();
-        console.log('✅ [FactoryRegistrations] Factories loaded');
-      } catch (error) {
-        console.error('❌ [FactoryRegistrations] Failed to load factories:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadUsers();
-  }, [fetchUsers]);
+    const hasCachedUsers = sessionStorage.getItem('retex_cache_users');
+    if (!hasCachedUsers) {
+      setIsLoading(true);
+    }
+    // Users are managed by AppContext context subscription
+    console.log('✅ [FactoryRegistrations] Component mounted, using cached/realtime users');
+    setIsLoading(false);
+  }, []);
 
   // Debouncing Search
   useEffect(() => {
@@ -64,6 +58,7 @@ export default function ManageFactoryRegistrations() {
     if (!selectedFactory) return;
     
     try {
+      setIsProcessing(true);
       console.log(`✅ Approving factory: ${selectedFactory.id}`);
       
       // Update verification status to verified
@@ -72,16 +67,20 @@ export default function ManageFactoryRegistrations() {
       // Update account status to Verified (so they can login)
       await updateUserStatus(selectedFactory.id, 'Verified', selectedFactory.name);
       
-      // Refresh the users list to show updated status
-      await fetchUsers();
+      // Brief pause for UI feedback then redirect
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       alert(`✅ ${selectedFactory.name} has been approved! They can now login.`);
       setShowActionModal(false);
       setSelectedFactory(null);
       setApprovalNote('');
+      
+      // Redirect to refresh the page
+      navigate('/admin/factory-registrations', { replace: true });
     } catch (error) {
       console.error('❌ Approval failed:', error);
       alert(`Failed to approve: ${error.message}`);
+      setIsProcessing(false);
     }
   };
 
@@ -89,6 +88,7 @@ export default function ManageFactoryRegistrations() {
     if (!selectedFactory) return;
     
     try {
+      setIsProcessing(true);
       console.log(`❌ Rejecting factory: ${selectedFactory.id}`);
       
       // Update verification status to rejected
@@ -97,16 +97,20 @@ export default function ManageFactoryRegistrations() {
       // Update account status to show rejection
       await updateUserStatus(selectedFactory.id, 'Rejected', selectedFactory.name);
       
-      // Refresh the users list
-      await fetchUsers();
+      // Brief pause for UI feedback then redirect
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       alert(`❌ ${selectedFactory.name}'s registration was not approved. They will be notified at their email.`);
       setShowActionModal(false);
       setSelectedFactory(null);
       setRejectionNote('');
+      
+      // Redirect to refresh the page
+      navigate('/admin/factory-registrations', { replace: true });
     } catch (error) {
       console.error('❌ Rejection failed:', error);
       alert(`Failed to reject: ${error.message}`);
+      setIsProcessing(false);
     }
   };
 
@@ -356,19 +360,28 @@ export default function ManageFactoryRegistrations() {
                   setApprovalNote('');
                   setRejectionNote('');
                 }}
-                className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
+                disabled={isProcessing}
+                className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={actionType === 'approve' ? handleApprove : handleReject}
-                className={`flex-1 px-4 py-2.5 text-white font-semibold rounded-lg transition-all ${
+                disabled={isProcessing}
+                className={`flex-1 px-4 py-2.5 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                   actionType === 'approve'
                     ? 'bg-green-600 hover:bg-green-700'
                     : 'bg-red-600 hover:bg-red-700'
                 }`}
               >
-                {actionType === 'approve' ? 'Approve' : 'Reject'}
+                {isProcessing ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  actionType === 'approve' ? 'Approve' : 'Reject'
+                )}
               </button>
             </div>
           </div>

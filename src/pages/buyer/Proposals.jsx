@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { FileText, CheckCircle, XCircle, Clock, ChevronRight, MessageSquare, AlertCircle, Send, Package, Calendar, DollarSign } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, ChevronRight, MessageSquare, AlertCircle, Send, Package, Calendar } from 'lucide-react';
 import TenderTracker from '../../components/TenderTracker';
 
 export default function BuyerProposals() {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShieldAlert, BarChart, User, FileText, ArrowRight, TrendingUp, Activity, DollarSign, ShoppingBag, Factory } from 'lucide-react';
+import { ShieldAlert, BarChart, User, FileText, ArrowRight, TrendingUp, Activity, IndianRupee, ShoppingBag, Factory } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function AdminDashboard() {
@@ -107,7 +107,7 @@ export default function AdminDashboard() {
         <StatCard 
             title="Total Revenue" 
             value={`₹${stats.totalRevenue.toLocaleString()}`} 
-            icon={<DollarSign size={20} className="text-emerald-500" />}
+            icon={<IndianRupee size={20} className="text-emerald-500" />}
             trend={`${stats.trends?.revenue.toFixed(1)}%`}
             isPositive={stats.trends?.revenue >= 0}
         />

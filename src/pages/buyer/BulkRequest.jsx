@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Check, Loader2, Send, Info, Package, DollarSign, Calendar, FileText } from 'lucide-react';
+import { ShoppingCart, Check, Loader2, Send, Info, Package, IndianRupee, Calendar, FileText } from 'lucide-react';
 
 export default function BulkRequest() {
   const { user, addBulkRequest, listings, fetchListings } = useApp();
@@ -290,7 +290,7 @@ export default function BulkRequest() {
                                className={`w-full pl-10 bg-slate-50 dark:bg-slate-900/50 border ${errors.targetPrice ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-slate-400`}
                                placeholder="Optional"
                              />
-                             <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                             <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                           </div>
                           {errors.targetPrice && <p className="text-xs text-red-500 mt-1">{errors.targetPrice}</p>}
                        </InputGroup>

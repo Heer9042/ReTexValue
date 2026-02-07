@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Send, Package, DollarSign, Calendar, FileText, MapPin, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Search, Filter, Send, Package, Calendar, FileText, MapPin, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
 export default function FactoryBulkRequests() {
   const { bulkRequests, user, proposals, fetchBulkRequests, fetchProposals } = useApp();

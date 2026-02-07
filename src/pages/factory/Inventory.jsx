@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useNavigate } from 'react-router-dom';
 import { Trash2, Edit, Search, Filter, SlidersHorizontal, ArrowUpDown, Package, Trash, AlertCircle, Plus, X, Upload, Save, Loader, Image as ImageIcon } from 'lucide-react';
 import blendedImg from '../../assets/blended_fabric.png';
 
 export default function Inventory() {
   const { listings, deleteListing, addListing, updateListing, user, uploadFile, fetchListings } = useApp();
+   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -160,7 +162,7 @@ export default function Inventory() {
            <p className="text-slate-500 dark:text-slate-400 mt-1">Track and manage your textile waste listings.</p>
         </div>
         <button 
-           onClick={handleOpenAdd}
+           onClick={() => navigate('/factory/upload')}
            className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-emerald-500 text-white rounded-2xl font-bold text-sm shadow-xl shadow-slate-200 dark:shadow-emerald-500/20 hover:scale-105 transition-all"
         >
            <Plus size={20} />
@@ -337,10 +339,10 @@ export default function Inventory() {
                     </button>
                 </div>
                 
-                <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Image Upload */}
-                        <div className="md:col-span-2 flex flex-col items-center gap-4">
+               <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                     {/* Image Upload */}
+                     <div className="col-span-full flex flex-col items-center gap-4">
                             <div className="relative w-32 h-32 group">
                                 <div className="w-full h-full rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-900/50 shadow-inner">
                                     {formData.imageUrl ? (
@@ -437,7 +439,7 @@ export default function Inventory() {
                              />
                         </div>
 
-                        <div className="space-y-2 md:col-span-2">
+                        <div className="space-y-2 col-span-full">
                              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Description</label>
                              <textarea 
                                 rows="3"

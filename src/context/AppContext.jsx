@@ -6,6 +6,23 @@ import blendedImg from '../assets/blended_fabric.png';
 
 const AppContext = createContext();
 
+// 🔄 Retry logic for robust network handling on hosted deployments
+const withRetry = async (fn, maxRetries = 3, delayMs = 1000) => {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      console.warn(`⚠️ [Retry] Attempt ${attempt}/${maxRetries} failed, retrying in ${delayMs}ms...`, error.message);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+};
+
 const mapUserData = (u) => ({
   id: u.id,
   name: u.full_name || u.username || 'Unknown',
@@ -131,14 +148,17 @@ export const AppProvider = ({ children }) => {
 
   const fetchBulkRequests = React.useCallback(async () => {
       try {
-          const { data, error } = await supabase
-            .from('bulk_requests')
-            .select('*')
-            .order('created_at', { ascending: false });
+          console.log('📥 [fetchBulkRequests] Starting fetch...');
+          const data = await withRetry(async () => {
+            const { data, error } = await supabase
+              .from('bulk_requests')
+              .select('*')
+              .order('created_at', { ascending: false });
+            if (error) throw error;
+            return data;
+          });
 
-          if(error) throw error;
-
-          if(data) {
+          if(data && data.length > 0) {
               const mappedRequests = data.map(r => ({
                   id: r.id,
                   fabricCategory: r.fabric_category || 'Other',
@@ -152,12 +172,16 @@ export const AppProvider = ({ children }) => {
                   buyerId: r.buyer_id,
                   created_at: r.created_at
               }));
+              console.log('✅ [fetchBulkRequests] Fetched ' + mappedRequests.length + ' bulk requests');
               setBulkRequests(mappedRequests);
               sessionStorage.setItem('retex_cache_bulkRequests', JSON.stringify(mappedRequests));
-              
+          } else {
+              console.warn('⚠️ [fetchBulkRequests] No bulk requests returned');
+              setBulkRequests([]);
           }
       } catch (error) {
-          console.error("Failed to fetch bulk requests:", error.message);
+          console.error("❌ [fetchBulkRequests] Failed after retries:", error.message);
+          // Keep existing cached data if fetch fails
       }
         }, []);
 
@@ -260,6 +284,7 @@ export const AppProvider = ({ children }) => {
               price: listing.price || 0,
               location: listing.location || 'N/A',
               date: listing.created_at ? new Date(listing.created_at).toISOString().split('T')[0] : 'N/A',
+              createdAt: listing.created_at || new Date().toISOString(),
               status: listing.status || 'Pending',
               aiConfidence: listing.ai_confidence || 0,
               description: listing.description
@@ -440,14 +465,18 @@ export const AppProvider = ({ children }) => {
   
   const fetchListings = React.useCallback(async () => {
       try {
-        const { data, error } = await supabase
-            .from('listings')
-            .select('*')
-            .order('created_at', { ascending: false });
+        console.log('📥 [fetchListings] Starting fetch...');
+        const data = await withRetry(async () => {
+          const { data, error } = await supabase
+              .from('listings')
+              .select('*')
+              .order('created_at', { ascending: false });
+          if (error) throw error;
+          return data;
+        });
 
-        if(error) throw error;
-
-        if(data) {
+        if(data && data.length > 0) {
+            console.log('📦 [fetchListings] Fetched ' + data.length + ' listings from database');
             const mappedListings = data.map(l => {
                 let displayImage = l.image_url;
                 if (!displayImage || displayImage === 'null') {
@@ -462,7 +491,7 @@ export const AppProvider = ({ children }) => {
                     factoryId: l.factory_id || 'factory_unknown',
                     imageUrl: displayImage,
                     fabricType: l.fabric_type || 'Unknown',
-                    fabricCategory: l.fabric_category || 'Other', // Map the category
+                    fabricCategory: l.fabric_category || 'Other',
                     shopName: l.shop_name || 'Unknown',
                     contact: l.contact || 'N/A',
                     email: l.email || 'N/A',
@@ -470,16 +499,22 @@ export const AppProvider = ({ children }) => {
                     price: l.price || 0,
                     location: l.location || 'N/A',
                     date: l.created_at ? new Date(l.created_at).toISOString().split('T')[0] : 'N/A',
+                    createdAt: l.created_at || new Date().toISOString(),
                     status: l.status || 'Pending',
                     aiConfidence: l.ai_confidence || 0,
                     description: l.description
                 };
             });
+            console.log('✅ [fetchListings] Mapped listings:', mappedListings.length);
             setListings(mappedListings);
             sessionStorage.setItem('retex_cache_listings', JSON.stringify(mappedListings));
+        } else {
+            console.warn('⚠️ [fetchListings] No listings returned');
+            setListings([]);
         }
       } catch (error) {
-          console.error("Failed to fetch listings:", error.message);
+          console.error("❌ [fetchListings] Failed after retries:", error.message);
+          // Keep existing cached data if fetch fails
       }
   }, []);
 
@@ -896,10 +931,7 @@ export const AppProvider = ({ children }) => {
     setLoading(true);
     try {
       await Promise.allSettled([
-          fetchUsers(),
           fetchListings(),
-          fetchTransactions(),
-          fetchReports(),
           fetchBulkRequests(),
           fetchProposals(),
           fetchSettings(),
@@ -907,22 +939,37 @@ export const AppProvider = ({ children }) => {
       ]);
     } finally {
       setLoading(false);
-      console.log("✅ [Backend] Initial data fetch complete");
+      console.log("✅ [Backend] Public data fetch complete");
     }
   }, [
-    fetchUsers,
     fetchListings,
-    fetchTransactions,
-    fetchReports,
     fetchBulkRequests,
     fetchProposals,
     fetchSettings,
     fetchPackages
   ]);
 
+  const fetchUserSpecificData = React.useCallback(async () => {
+    console.log("🔄 [Backend] Initializing user-specific data fetch...");
+    try {
+      await Promise.allSettled([
+          fetchUsers(),
+          fetchTransactions(),
+          fetchReports()
+      ]);
+    } catch (error) {
+      console.error("❌ [Backend] User data fetch failed:", error);
+    }
+  }, [
+    fetchUsers,
+    fetchTransactions,
+    fetchReports
+  ]);
+
   const runInitialFetchOnce = React.useCallback(async () => {
     if (initialDataFetchedRef.current) return;
     initialDataFetchedRef.current = true;
+    // Always fetch public data first
     await fetchInitialData();
   }, [fetchInitialData]);
 
@@ -930,6 +977,10 @@ export const AppProvider = ({ children }) => {
     // Only run this initialization once per component mount
     if (authInitializedRef.current) return;
     authInitializedRef.current = true;
+    
+    // Always fetch public data (no auth required)
+    console.log("📡 [Init] Starting app initialization...");
+    runInitialFetchOnce();
     
     // 1. Core Auth & Session Strategy
     const initializeAuth = async () => {
@@ -957,7 +1008,8 @@ export const AppProvider = ({ children }) => {
                   localStorage.setItem('retex_user', JSON.stringify(userData));
                   localStorage.setItem('userRole', profile.role);
                   localStorage.removeItem('mockUser'); // Ensure real session takes over
-                    runInitialFetchOnce();
+                  // Fetch user-specific data
+                  await fetchUserSpecificData();
               }
           } else {
               // 🛡️ Final Verification: If no session and NOT a mock, clear everything
@@ -974,23 +1026,8 @@ export const AppProvider = ({ children }) => {
           }
       } catch (error) {
           console.error("❌ [Auth] Initialization failed:", error);
-      } finally {
-          setLoading(false);
       }
     };
-
-    // 2. Fast-Path Data Fetch (Run immediately if we have cached data)
-    const cachedUser = localStorage.getItem('retex_user');
-    const hasCachedData = sessionStorage.getItem('retex_cache_listings') || 
-                          sessionStorage.getItem('retex_cache_users');
-    
-    if (cachedUser || hasCachedData) {
-      console.log("⚡ [Init] Found cached user/data, setting loading to false...");
-      setLoading(false);
-      if (cachedUser) {
-        runInitialFetchOnce();
-      }
-    }
 
     initializeAuth();
 
@@ -1016,7 +1053,8 @@ export const AppProvider = ({ children }) => {
             setUser(userData);
             localStorage.setItem('retex_user', JSON.stringify(userData));
             localStorage.setItem('userRole', profile.role); 
-            runInitialFetchOnce();
+            // Fetch user-specific data after login
+            await fetchUserSpecificData();
           }
       } else if (event === 'SIGNED_OUT') {
         console.log("🚪 [Auth] User signed out, clearing all session data.");
@@ -1038,7 +1076,7 @@ export const AppProvider = ({ children }) => {
     return () => {
       if (authListener?.subscription) authListener.subscription.unsubscribe();
     };
-  }, [runInitialFetchOnce]);
+  }, [runInitialFetchOnce, fetchUserSpecificData]);
 
   // Remove the duplicate fetch-on-user-id effect to prevent race conditions
 
@@ -1047,7 +1085,8 @@ export const AppProvider = ({ children }) => {
         setUser(role);
         localStorage.setItem('retex_user', JSON.stringify(role));
         localStorage.setItem('userRole', role.role);
-        fetchInitialData();
+        await fetchInitialData();
+        await fetchUserSpecificData();
         return;
     }
     const mockUser = { id: 'mock', name: 'Mock User', role: role, email: 'mock@test.com' };
@@ -1055,7 +1094,8 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('retex_user', JSON.stringify(mockUser));
     localStorage.setItem('mockUser', JSON.stringify(mockUser));
     localStorage.setItem('userRole', role);
-    fetchInitialData();
+    await fetchInitialData();
+    await fetchUserSpecificData();
   };
 
   const logout = async () => {
@@ -2152,7 +2192,8 @@ export const AppProvider = ({ children }) => {
       theme, toggleTheme,
       updateProfile, uploadFile,
       updateVerificationStatus, getPendingVerifications,
-      changePassword, toggleTwoFactorAuth, getActiveSessions, revokeSession, revokeAllSessions, getSecurityAuditLog, sendPasswordChangeEmail
+      changePassword, toggleTwoFactorAuth, getActiveSessions, revokeSession, revokeAllSessions, getSecurityAuditLog, sendPasswordChangeEmail,
+      fetchInitialData, fetchUserSpecificData
     }}>
       {children}
     </AppContext.Provider>
