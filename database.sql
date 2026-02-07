@@ -19,12 +19,12 @@ BEGIN
     ) THEN
         ALTER TABLE public.profiles 
         ADD COLUMN verification_status VARCHAR(50) DEFAULT 'verified' 
-        CHECK (verification_status IN ('unverified', 'verified'));
+        CHECK (verification_status IN ('unverified', 'verified', 'rejected'));
         RAISE NOTICE 'Added verification_status column';
     ELSE
         ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_verification_status_check;
         ALTER TABLE public.profiles ADD CONSTRAINT profiles_verification_status_check 
-        CHECK (verification_status IN ('unverified', 'verified'));
+        CHECK (verification_status IN ('unverified', 'verified', 'rejected'));
         RAISE NOTICE 'verification_status column already exists - updated constraint';
     END IF;
 END $$;
@@ -169,20 +169,139 @@ CREATE TABLE IF NOT EXISTS public.packages (
     name VARCHAR(100) NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
     description TEXT,
-    features JSONB,
+    features JSONB DEFAULT '[]'::jsonb,
     duration_days INTEGER DEFAULT 30,
-    is_active BOOLEAN DEFAULT true,
+    max_listings INTEGER DEFAULT 10,
+    max_bulk_requests INTEGER DEFAULT 5,
+    priority_support BOOLEAN DEFAULT false,
+    ai_credits INTEGER DEFAULT 100,
+    badge_color VARCHAR(50) DEFAULT 'blue',
+    is_featured BOOLEAN DEFAULT false,
+    status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Update existing columns if table exists
+DO $$ 
+BEGIN
+    -- Add missing columns if they don't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'max_listings') THEN
+        ALTER TABLE public.packages ADD COLUMN max_listings INTEGER DEFAULT 10;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'max_bulk_requests') THEN
+        ALTER TABLE public.packages ADD COLUMN max_bulk_requests INTEGER DEFAULT 5;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'priority_support') THEN
+        ALTER TABLE public.packages ADD COLUMN priority_support BOOLEAN DEFAULT false;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'ai_credits') THEN
+        ALTER TABLE public.packages ADD COLUMN ai_credits INTEGER DEFAULT 100;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'badge_color') THEN
+        ALTER TABLE public.packages ADD COLUMN badge_color VARCHAR(50) DEFAULT 'blue';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'is_featured') THEN
+        ALTER TABLE public.packages ADD COLUMN is_featured BOOLEAN DEFAULT false;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'packages' 
+                   AND column_name = 'status') THEN
+        ALTER TABLE public.packages ADD COLUMN status VARCHAR(50) DEFAULT 'active';
+    END IF;
+    
+    -- Drop is_active column if it exists (replace with status)
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_schema = 'public' AND table_name = 'packages' 
+               AND column_name = 'is_active') THEN
+        ALTER TABLE public.packages DROP COLUMN is_active;
+    END IF;
+    
+    RAISE NOTICE 'Packages table schema updated successfully';
+END $$;
+
 -- Enable RLS on packages
 ALTER TABLE public.packages ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Anyone can view active packages" ON public.packages;
+DROP POLICY IF EXISTS "Admin can insert packages" ON public.packages;
+DROP POLICY IF EXISTS "Admin can update packages" ON public.packages;
+DROP POLICY IF EXISTS "Admin can delete packages" ON public.packages;
 
 -- Allow everyone to view active packages
 CREATE POLICY "Anyone can view active packages"
 ON public.packages FOR SELECT
-USING (is_active = true);
+USING (status = 'active');
+
+-- Allow admins to view all packages
+CREATE POLICY "Admin can view all packages"
+ON public.packages FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE profiles.id = auth.uid() 
+    AND profiles.role = 'admin'
+  )
+);
+
+-- Allow only admins to insert packages
+CREATE POLICY "Admin can insert packages"
+ON public.packages FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE profiles.id = auth.uid() 
+    AND profiles.role = 'admin'
+  )
+);
+
+-- Allow only admins to update packages
+CREATE POLICY "Admin can update packages"
+ON public.packages FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE profiles.id = auth.uid() 
+    AND profiles.role = 'admin'
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE profiles.id = auth.uid() 
+    AND profiles.role = 'admin'
+  )
+);
+
+-- Allow only admins to delete packages
+CREATE POLICY "Admin can delete packages"
+ON public.packages FOR DELETE
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE profiles.id = auth.uid() 
+    AND profiles.role = 'admin'
+  )
+);
 
 -- =====================================================
 -- 5. Transactions Table Setup
@@ -269,11 +388,65 @@ USING (bucket_id = 'textile-images' AND auth.uid()::text = owner);
 -- 8. Grant Permissions
 -- =====================================================
 
-GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.transactions TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.bulk_requests TO authenticated;
-GRANT SELECT ON public.packages TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.transactions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.bulk_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.packages TO authenticated;
 GRANT EXECUTE ON FUNCTION public.set_new_user_verification() TO authenticated;
+
+-- =====================================================
+-- Sample Packages Data
+-- =====================================================
+
+-- Insert sample packages if they don't exist
+INSERT INTO public.packages (
+    name, description, price, duration_days, max_listings, 
+    max_bulk_requests, priority_support, ai_credits, 
+    badge_color, is_featured, status, features
+) VALUES 
+(
+    'Starter',
+    'Perfect for new textile sellers getting started with our platform',
+    999,
+    30,
+    5,
+    2,
+    false,
+    100,
+    'blue',
+    false,
+    'active',
+    '["5 Active Listings", "2 Bulk Requests/month", "Basic Support", "100 AI Credits"]'
+),
+(
+    'Professional',
+    'Ideal for growing textile businesses looking to scale',
+    2999,
+    30,
+    25,
+    10,
+    true,
+    500,
+    'purple',
+    true,
+    'active',
+    '["25 Active Listings", "10 Bulk Requests/month", "Priority Support", "500 AI Credits", "Advanced Analytics"]'
+),
+(
+    'Enterprise',
+    'Complete solution for large-scale textile operations',
+    9999,
+    30,
+    999999,
+    999999,
+    true,
+    999999,
+    'rose',
+    false,
+    'active',
+    '["Unlimited Listings", "Unlimited Bulk Requests", "24/7 Priority Support", "Unlimited AI Credits", "Dedicated Account Manager", "Custom Integration"]'
+)
+ON CONFLICT DO NOTHING;
 
 -- =====================================================
 -- 9. Verification Summary

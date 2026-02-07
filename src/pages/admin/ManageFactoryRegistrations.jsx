@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 
 export default function ManageFactoryRegistrations() {
   const { users, fetchUsers, updateVerificationStatus, updateUserStatus } = useApp();
+  console.log('📊 [ManageFactoryRegistrations] Users loaded:', users.length);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // All, Unverified, Verified
@@ -71,6 +72,9 @@ export default function ManageFactoryRegistrations() {
       // Update account status to Verified (so they can login)
       await updateUserStatus(selectedFactory.id, 'Verified', selectedFactory.name);
       
+      // Refresh the users list to show updated status
+      await fetchUsers();
+      
       alert(`✅ ${selectedFactory.name} has been approved! They can now login.`);
       setShowActionModal(false);
       setSelectedFactory(null);
@@ -87,9 +91,16 @@ export default function ManageFactoryRegistrations() {
     try {
       console.log(`❌ Rejecting factory: ${selectedFactory.id}`);
       
-      // Update verification status to unverified (keep as unverified = not approved)
-      // For now, we'll just keep them unverified. Could add a 'rejected' status if needed
-      alert(`❌ ${selectedFactory.name}'s registration was not approved. They will be notified.`);
+      // Update verification status to rejected
+      await updateVerificationStatus(selectedFactory.id, 'rejected');
+      
+      // Update account status to show rejection
+      await updateUserStatus(selectedFactory.id, 'Rejected', selectedFactory.name);
+      
+      // Refresh the users list
+      await fetchUsers();
+      
+      alert(`❌ ${selectedFactory.name}'s registration was not approved. They will be notified at their email.`);
       setShowActionModal(false);
       setSelectedFactory(null);
       setRejectionNote('');
@@ -109,6 +120,15 @@ export default function ManageFactoryRegistrations() {
       );
     }
 
+    if (status === 'rejected') {
+      return (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+          <AlertTriangle size={14} />
+          <span>Rejected</span>
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
         <Clock size={14} />
@@ -119,6 +139,7 @@ export default function ManageFactoryRegistrations() {
 
   const pendingCount = users.filter(u => (u.role === 'factory' || u.role === 'Factory') && u.verificationStatus === 'unverified').length;
   const approvedCount = users.filter(u => (u.role === 'factory' || u.role === 'Factory') && u.verificationStatus === 'verified').length;
+  const rejectedCount = users.filter(u => (u.role === 'factory' || u.role === 'Factory') && u.verificationStatus === 'rejected').length;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -133,7 +154,7 @@ export default function ManageFactoryRegistrations() {
         </div>
 
         {/* Stats */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-wrap">
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
             <p className="text-amber-600 dark:text-amber-400 text-sm font-semibold">Pending Approval</p>
             <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">{pendingCount}</p>
@@ -141,6 +162,10 @@ export default function ManageFactoryRegistrations() {
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <p className="text-green-600 dark:text-green-400 text-sm font-semibold">Approved</p>
             <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">{approvedCount}</p>
+          </div>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-red-600 dark:text-red-400 text-sm font-semibold">Rejected</p>
+            <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-1">{rejectedCount}</p>
           </div>
         </div>
       </div>
@@ -156,8 +181,9 @@ export default function ManageFactoryRegistrations() {
               className="appearance-none bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 pl-10 pr-8 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none w-full sm:w-40"
             >
               <option value="All">All Status</option>
-              <option value="Unverified">Pending Approval</option>
+              <option value="Pending">Pending Approval</option>
               <option value="Verified">Approved</option>
+              <option value="Rejected">Rejected</option>
             </select>
             <Filter className="absolute left-3 top-3 text-slate-500 w-4 h-4 pointer-events-none" />
           </div>
@@ -264,6 +290,13 @@ export default function ManageFactoryRegistrations() {
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
                     <span className="text-sm font-semibold text-green-700 dark:text-green-300">Approved</span>
+                  </div>
+                )}
+
+                {factory.verificationStatus === 'rejected' && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
+                    <span className="text-sm font-semibold text-red-700 dark:text-red-300">Rejected</span>
                   </div>
                 )}
               </div>

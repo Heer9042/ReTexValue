@@ -745,7 +745,11 @@ export default function Register() {
                             type="checkbox"
                             name="wantsToBeFactory"
                             checked={formData.wantsToBeFactory}
-                            onChange={(e) => setFormData({ ...formData, wantsToBeFactory: e.target.checked })}
+                            onChange={(e) => setFormData({ 
+                                ...formData, 
+                                wantsToBeFactory: e.target.checked,
+                                role: e.target.checked ? 'factory' : 'buyer'
+                            })}
                             className="mt-1 w-5 h-5 text-emerald-600 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer"
                         />
                         <div className="flex-1">
