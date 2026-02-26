@@ -1,0 +1,6 @@
+Contact: security@retexvalue.com
+Expires: 2026-12-31T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://retexvalue.com/.well-known/security.txt
+Policy: https://retexvalue.com/security-policy
+Acknowledgments: https://retexvalue.com/security-acknowledgments

@@ -1,0 +1,39 @@
+# ReTex Value - SEO Robots.txt
+# This file tells search engines how to crawl your website
+
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /private/
+Disallow: /.env
+Disallow: /node_modules/
+Disallow: /*.json
+Allow: /api/
+
+# Crawl Delay in seconds
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://retexvalue.netlify.app/sitemap.xml
+
+# Google Specific Rules
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+Crawl-delay: 0
+
+# Bing Specific Rules
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Crawl-delay: 1
+
+# Block bad bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
